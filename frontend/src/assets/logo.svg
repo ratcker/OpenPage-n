@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 47 38" fill="none">
+  <!-- Цвета -->
+  <defs>
+    <linearGradient id="logo-gradient" x1="23.5" y1="0" x2="23.5" y2="38" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#A878FF" />
+      <stop offset="1" stop-color="#6F3DE2" />
+    </linearGradient>
+  </defs>
+  <!-- Знак -->
+  <rect width="21" height="38" rx="8" fill="url(#logo-gradient)" />
+  <rect x="26" width="21" height="38" rx="8" fill="url(#logo-gradient)" />
+</svg>
