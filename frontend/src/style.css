@@ -85,6 +85,11 @@ a {
   padding: 48px 16px;
 }
 
+.landing-actions {
+  display: flex;
+  gap: 12px;
+}
+
 .hub-button {
   width: 52px;
   height: 52px;
@@ -105,7 +110,7 @@ a {
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 1.8;
+  stroke-width: 1.5;
 }
 
 /* Шапка */
@@ -265,6 +270,73 @@ a {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.8;
+}
+
+/* Вход */
+.login {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 72px 24px;
+}
+
+.login-content {
+  width: min(100%, 400px);
+}
+
+.login h1 {
+  margin: 0;
+  font-size: 2.55rem;
+  font-weight: 620;
+  line-height: 1.1;
+}
+
+.login-text {
+  margin: 14px 0 0;
+  color: var(--muted-text);
+  font-size: 0.9rem;
+  line-height: 1.6;
+}
+
+.login-form {
+  display: grid;
+  gap: 20px;
+  margin-top: 32px;
+}
+
+.login-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--soft-text);
+  font-size: 0.8rem;
+}
+
+.login-form input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  color: var(--text);
+  background: var(--surface);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.login-form input::placeholder {
+  color: var(--muted-text);
+}
+
+.login-form input:focus {
+  border-color: var(--accent);
+}
+
+.login-form .primary-button {
+  width: 100%;
+  justify-content: center;
+  margin-top: 4px;
+  cursor: pointer;
 }
 
 /* Сервисы */
@@ -455,6 +527,15 @@ a {
 
   .hero h1 {
     font-size: 3rem;
+  }
+
+  .login {
+    place-items: start center;
+    padding: 56px 16px;
+  }
+
+  .login h1 {
+    font-size: 2rem;
   }
 
   .hero-text {
