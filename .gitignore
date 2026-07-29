@@ -10,14 +10,17 @@ __pycache__/
 *.py[cod]
 *.egg-info/
 .pytest_cache/
+.mypy_cache/
 .ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 
 backend/db.sqlite3
 backend/*.log
 
 .env
 *.local
-ratcker.md
 
 .idea/
 .vscode/
