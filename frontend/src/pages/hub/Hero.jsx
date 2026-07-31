@@ -3,7 +3,7 @@ export default function Hero() {
   return (
     <section className="hero" id="top" aria-labelledby="hero-title">
       <div className="container hero-content">
-        <p className="eyebrow"><span />ОпенПейч</p>
+        <p className="eyebrow"><span />Опенпейч</p>
         <h1 id="hero-title">Сервисы рядом</h1>
         <p className="hero-text">Всё нужное в одном месте.</p>
 
