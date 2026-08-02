@@ -1,6 +1,6 @@
 import HubPage from './pages/hub/HubPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
-import LoginPage from './pages/LoginPage.jsx';
+import LoginPage from './pages/LoginPage/LoginPage.jsx';
 
 // Выбор страницы
 export default function App() {

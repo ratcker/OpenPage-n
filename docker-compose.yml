@@ -7,7 +7,10 @@ services:
 
   frontend:
     build: ./frontend
+    depends_on: [backend]
     env_file: .env
+    environment:
+      VITE_API_PROXY_TARGET: http://backend:8000
     ports: ["5173:5173"]
     volumes:
       - ./frontend/src:/app/src
