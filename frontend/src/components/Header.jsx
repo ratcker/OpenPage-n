@@ -17,12 +17,12 @@ export default function Header() {
             <Link to="/hub#services">Сервисы</Link>
           </nav>
 
-          <button className="profile" type="button" disabled title="Скоро">
+          <Link className="profile" to="/profile">
             <svg viewBox="0 0 20 20" aria-hidden="true">
               <path d="M10 10.1a3.55 3.55 0 1 0 0-7.1 3.55 3.55 0 0 0 0 7.1Zm-6 6.8c.38-3.02 2.87-4.85 6-4.85s5.62 1.83 6 4.85" />
             </svg>
             <span>Профиль</span>
-          </button>
+          </Link>
         </div>
       </div>
     </header>

@@ -1,29 +1,16 @@
-const AUTH_URL = '/api/auth';
+import {
+  authorizedRequest,
+  refreshSession,
+  request,
+} from './client.js';
 
 // Общий POST для сценариев авторизации
-async function post(path, body) {
-  let response;
-
-  try {
-    response = await fetch(`${AUTH_URL}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(body),
-    });
-  } catch {
-    throw new Error('Сервер недоступен. Попробуйте позже.');
-  }
-
-  const data = await response.json().catch(() => ({}));
-
-  if (!response.ok) {
-    const fieldError = Object.values(data).find(Array.isArray)?.[0];
-    const message = data.detail || data.non_field_errors?.[0] || fieldError;
-    throw new Error(message || 'Не удалось выполнить запрос.');
-  }
-
-  return data;
+function post(path, body) {
+  return request(path, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
 }
 
 export function login(email, password) {
@@ -36,4 +23,16 @@ export function register(data) {
 
 export function verifyEmail(email, code) {
   return post('/verify-email/', { email, code });
+}
+
+export function refresh() {
+  return refreshSession();
+}
+
+export function me() {
+  return authorizedRequest('/me/');
+}
+
+export function logout() {
+  return request('/logout/', { method: 'POST' });
 }

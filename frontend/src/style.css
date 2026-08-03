@@ -176,9 +176,9 @@ a {
   font-size: 0.8125rem;
 }
 
-.profile:disabled {
-  opacity: 1;
-  cursor: default;
+.profile:hover {
+  border-color: #4b4358;
+  color: var(--text);
 }
 
 .profile svg {
@@ -399,6 +399,64 @@ a {
 
 .verification-form {
   margin-top: 24px;
+}
+
+/* Сессия и профиль */
+.session-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  color: var(--muted-text);
+  font-size: 0.85rem;
+}
+
+.profile-page {
+  flex: 1;
+  padding: 96px 0;
+}
+
+.profile-content {
+  max-width: 560px;
+}
+
+.profile-content h1 {
+  margin: 0;
+  font-size: 2.55rem;
+  font-weight: 620;
+}
+
+.profile-data {
+  margin: 38px 0 0;
+}
+
+.profile-data > div {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 20px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+}
+
+.profile-data dt {
+  color: var(--muted-text);
+  font-size: 0.8rem;
+}
+
+.profile-data dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: var(--soft-text);
+}
+
+.profile-logout {
+  margin-top: 24px;
+  cursor: pointer;
+}
+
+.profile-logout:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 
 /* Сервисы */

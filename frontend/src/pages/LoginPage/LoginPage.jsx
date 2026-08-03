@@ -1,13 +1,16 @@
 import { useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 
-import { login, register, verifyEmail } from '../../api/auth.js';
+import { register, verifyEmail } from '../../api/auth.js';
+import useAuth from '../../auth/useAuth.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
 import AuthForm from './AuthForm.jsx';
 import VerificationDialog from './VerificationDialog.jsx';
 
 // Вход и регистрация
 export default function LoginPage() {
+  const { login } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
   const [mode, setMode] = useState('login');
   const [error, setError] = useState('');
@@ -15,6 +18,7 @@ export default function LoginPage() {
   const [pendingEmail, setPendingEmail] = useState('');
   const [verificationError, setVerificationError] = useState('');
   const [isVerifying, setIsVerifying] = useState(false);
+  const destination = location.state?.from || '/hub';
   // Исходный пароль живёт только до автоматического входа.
   const registrationPassword = useRef('');
 
@@ -35,8 +39,8 @@ export default function LoginPage() {
 
       await login(data.email, data.password);
 
-      // Refresh-токен уже сохранён в HttpOnly cookie.
-      navigate('/hub', { replace: true });
+      // AuthProvider уже сохранил сессию в памяти.
+      navigate(destination, { replace: true });
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -59,7 +63,7 @@ export default function LoginPage() {
       isVerified = true;
       await login(pendingEmail, registrationPassword.current);
       registrationPassword.current = '';
-      navigate('/hub', { replace: true });
+      navigate(destination, { replace: true });
     } catch (requestError) {
       if (isVerified) {
         registrationPassword.current = '';
