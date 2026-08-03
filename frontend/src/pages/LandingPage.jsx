@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 import SiteLayout from '../components/SiteLayout.jsx';
 import { GridIcon, ProfileIcon } from '../components/Icons.jsx';
 
@@ -7,12 +9,12 @@ export default function LandingPage() {
     <SiteLayout>
       <div className="landing">
         <div className="landing-actions">
-          <a className="hub-button" href="/hub" aria-label="Перейти в хаб" title="Хаб">
+          <Link className="hub-button" to="/hub" aria-label="Перейти в хаб" title="Хаб">
             <GridIcon />
-          </a>
-          <a className="hub-button" href="/login" aria-label="Войти в аккаунт" title="Войти">
+          </Link>
+          <Link className="hub-button" to="/login" aria-label="Войти в аккаунт" title="Войти">
             <ProfileIcon />
-          </a>
+          </Link>
         </div>
       </div>
     </SiteLayout>

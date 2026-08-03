@@ -1,3 +1,5 @@
+import { Link } from 'react-router-dom';
+
 import BrandMark from './BrandMark.jsx';
 
 // Шапка
@@ -5,14 +7,14 @@ export default function Header() {
   return (
     <header className="header">
       <div className="container header-inner">
-        <a href="/" aria-label="На лендинг">
+        <Link to="/" aria-label="На лендинг">
           <BrandMark />
-        </a>
+        </Link>
 
         <div className="header-actions">
           <nav className="nav" aria-label="Навигация">
-            <a href="/hub">Хаб</a>
-            <a href="/hub#services">Сервисы</a>
+            <Link to="/hub">Хаб</Link>
+            <Link to="/hub#services">Сервисы</Link>
           </nav>
 
           <button className="profile" type="button" disabled title="Скоро">

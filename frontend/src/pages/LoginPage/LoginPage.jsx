@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
 import { login, register, verifyEmail } from '../../api/auth.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
@@ -7,6 +8,7 @@ import VerificationDialog from './VerificationDialog.jsx';
 
 // Вход и регистрация
 export default function LoginPage() {
+  const navigate = useNavigate();
   const [mode, setMode] = useState('login');
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -34,7 +36,7 @@ export default function LoginPage() {
       await login(data.email, data.password);
 
       // Refresh-токен уже сохранён в HttpOnly cookie.
-      window.location.assign('/hub');
+      navigate('/hub', { replace: true });
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -57,7 +59,7 @@ export default function LoginPage() {
       isVerified = true;
       await login(pendingEmail, registrationPassword.current);
       registrationPassword.current = '';
-      window.location.assign('/hub');
+      navigate('/hub', { replace: true });
     } catch (requestError) {
       if (isVerified) {
         registrationPassword.current = '';
