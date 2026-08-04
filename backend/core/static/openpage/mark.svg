@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 47 38" fill="none">
+  <defs>
+    <linearGradient id="openpage-mark" x1="23.5" y1="0" x2="23.5" y2="38" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#dc78aa" />
+      <stop offset="1" stop-color="#7542da" />
+    </linearGradient>
+  </defs>
+  <rect width="21" height="38" rx="8" fill="url(#openpage-mark)" />
+  <rect x="26" width="21" height="38" rx="8" fill="url(#openpage-mark)" />
+</svg>

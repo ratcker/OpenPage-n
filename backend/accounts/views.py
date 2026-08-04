@@ -7,7 +7,14 @@ from django.contrib.auth.hashers import check_password, make_password
 from django.core.mail import send_mail
 from django.db import IntegrityError, transaction
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.types import OpenApiTypes
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    PolymorphicProxySerializer,
+    extend_schema,
+)
 from rest_framework import status
 from rest_framework.exceptions import ValidationError
 from rest_framework.parsers import JSONParser
@@ -19,6 +26,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from .models import PendingRegistration
 from .serializers import (
+    AuthSessionSerializer,
+    DetailResponseSerializer,
+    InvalidTokenErrorSerializer,
     LoginSerializer,
     RegisterSerializer,
     RegistrationAcceptedSerializer,
@@ -31,6 +41,97 @@ logger = logging.getLogger(__name__)
 REFRESH_COOKIE = "refresh_token"
 REFRESH_COOKIE_PATH = "/api/auth"
 REFRESH_COOKIE_SAMESITE = "Lax"
+AUTH_TAG = "Авторизация"
+REGISTRATION_CODE_TTL_MINUTES = int(
+    settings.REGISTRATION_CODE_TTL.total_seconds() // 60
+)
+REGISTRATION_RESEND_COOLDOWN_SECONDS = int(
+    settings.REGISTRATION_RESEND_COOLDOWN.total_seconds()
+)
+REFRESH_COOKIE_MAX_AGE = int(
+    settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()
+)
+
+# DRF может вернуть строку или список сообщений для каждого ошибочного поля.
+VALIDATION_ERROR_SCHEMA = {
+    "type": "object",
+    "additionalProperties": {
+        "oneOf": [
+            {"type": "string"},
+            {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        ]
+    },
+}
+
+EXAMPLE_USER = {
+    "id": 42,
+    "email": "anna@example.test",
+    "name": "Анна",
+    "date_joined": "2026-08-04T09:30:00Z",
+    "last_login": "2026-08-04T10:00:00Z",
+}
+EXAMPLE_SESSION = {
+    "access": "eyJhbGciOiJIUzI1NiJ9.example-access-token",
+    "user": EXAMPLE_USER,
+}
+
+REFRESH_COOKIE_DESCRIPTION = (
+    "HttpOnly-cookie `refresh_token`. Она недоступна JavaScript и отправляется "
+    "браузером автоматически для пути `/api/auth`. Используется `SameSite=Lax`, "
+    f"`Path=/api/auth`, `Max-Age={REFRESH_COOKIE_MAX_AGE}`; `Secure` включается "
+    "при `DEBUG=False`. "
+    "Для cross-origin fetch браузерный клиент должен использовать "
+    "`credentials: 'include'`."
+)
+REFRESH_COOKIE_REQUIRED = OpenApiParameter(
+    name=REFRESH_COOKIE,
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.COOKIE,
+    required=True,
+    description=REFRESH_COOKIE_DESCRIPTION,
+)
+REFRESH_COOKIE_OPTIONAL = OpenApiParameter(
+    name=REFRESH_COOKIE,
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.COOKIE,
+    required=False,
+    description=REFRESH_COOKIE_DESCRIPTION,
+)
+SET_REFRESH_COOKIE_HEADER = OpenApiParameter(
+    name="Set-Cookie",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    response=[200],
+    description=(
+        "Устанавливает или обновляет `refresh_token`: `HttpOnly`, "
+        f"`SameSite=Lax`, `Path=/api/auth`, `Max-Age={REFRESH_COOKIE_MAX_AGE}`; "
+        "`Secure` включается при `DEBUG=False`. Для cross-origin fetch нужны "
+        "`credentials: 'include'`."
+    ),
+)
+CLEAR_INVALID_REFRESH_COOKIE_HEADER = OpenApiParameter(
+    name="Set-Cookie",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    response=[401],
+    description=(
+        "Удаляет переданную недействительную refresh-cookie через `Max-Age=0`. "
+        "При отсутствии cookie заголовок также может отсутствовать."
+    ),
+)
+CLEAR_LOGOUT_COOKIE_HEADER = OpenApiParameter(
+    name="Set-Cookie",
+    type=OpenApiTypes.STR,
+    location=OpenApiParameter.HEADER,
+    response=[200],
+    description=(
+        "Удаляет refresh-cookie через `Max-Age=0`, `Path=/api/auth` и "
+        "`SameSite=Lax`."
+    ),
+)
 
 
 class EmailDeliveryError(Exception):
@@ -39,15 +140,12 @@ class EmailDeliveryError(Exception):
 
 # Письмо с кодом подтверждения
 def send_verification_code(email, code):
-    lifetime_minutes = int(
-        settings.REGISTRATION_CODE_TTL.total_seconds() // 60
-    )
     try:
         sent = send_mail(
             subject="Код подтверждения Опенпейч",
             message=(
                 f"Ваш код подтверждения Опенпейч: {code}\n\n"
-                f"Код действует {lifetime_minutes} минут.\n"
+                f"Код действует {REGISTRATION_CODE_TTL_MINUTES} минут.\n"
             ),
             from_email=settings.DEFAULT_FROM_EMAIL,
             recipient_list=[email],
@@ -97,6 +195,66 @@ def auth_response(user, refresh):
 class MeView(APIView):
     permission_classes = (IsAuthenticated,)
 
+    @extend_schema(
+        operation_id="auth_me",
+        summary="Получить текущего пользователя",
+        description=(
+            "Возвращает пользователя, которому принадлежит access-токен из "
+            "`Authorization: Bearer <access-token>`."
+        ),
+        tags=[AUTH_TAG],
+        responses={
+            200: OpenApiResponse(
+                response=UserSerializer,
+                description="Текущий пользователь.",
+                examples=[
+                    OpenApiExample(
+                        "Пользователь",
+                        value=EXAMPLE_USER,
+                        response_only=True,
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                response=PolymorphicProxySerializer(
+                    component_name="AuthenticationError",
+                    serializers=[
+                        DetailResponseSerializer,
+                        InvalidTokenErrorSerializer,
+                    ],
+                    resource_type_field_name=None,
+                ),
+                description=(
+                    "Access-токен отсутствует, просрочен или недействителен."
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Токен отсутствует",
+                        value={"detail": "Учетные данные не были предоставлены."},
+                        response_only=True,
+                    ),
+                    OpenApiExample(
+                        "Токен недействителен",
+                        value={
+                            "detail": (
+                                "Данный токен недействителен для любого типа "
+                                "токенов"
+                            ),
+                            "code": "token_not_valid",
+                            "messages": [
+                                {
+                                    "token_class": "AccessToken",
+                                    "token_type": "access",
+                                    "message": "Токен недействителен или просрочен",
+                                }
+                            ],
+                        },
+                        response_only=True,
+                    )
+                ],
+            ),
+        },
+    )
     def get(self, request):
         return Response(UserSerializer(request.user).data)
 
@@ -108,14 +266,77 @@ class RegisterView(APIView):
     parser_classes = (JSONParser,)
 
     @extend_schema(
+        operation_id="auth_register",
+        summary="Начать регистрацию",
+        description=(
+            "Проверяет данные, сохраняет незавершённую регистрацию и отправляет "
+            "шестизначный код на email. Пользователь и токены на этом шаге не "
+            f"создаются. Код действует {REGISTRATION_CODE_TTL_MINUTES} минут; "
+            "повторная отправка разрешена через "
+            f"{REGISTRATION_RESEND_COOLDOWN_SECONDS} секунд."
+        ),
+        tags=[AUTH_TAG],
+        auth=[],
         request=RegisterSerializer,
         responses={
-            202: RegistrationAcceptedSerializer,
-            400: OpenApiResponse(
-                description="Ошибка данных или слишком ранняя повторная отправка."
+            202: OpenApiResponse(
+                response=RegistrationAcceptedSerializer,
+                description="Код подтверждения отправлен.",
+                examples=[
+                    OpenApiExample(
+                        "Регистрация принята",
+                        value={
+                            "detail": "Код подтверждения отправлен на email.",
+                            "email": "anna@example.test",
+                        },
+                        response_only=True,
+                    )
+                ],
             ),
-            503: OpenApiResponse(description="Не удалось отправить письмо."),
+            400: OpenApiResponse(
+                response=VALIDATION_ERROR_SCHEMA,
+                description="Ошибка данных или слишком ранняя повторная отправка.",
+                examples=[
+                    OpenApiExample(
+                        "Пароли не совпадают",
+                        value={"password_confirm": ["Пароли не совпадают."]},
+                        response_only=True,
+                    )
+                ],
+            ),
+            415: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Тело запроса передано не как JSON.",
+            ),
+            503: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Не удалось отправить письмо.",
+                examples=[
+                    OpenApiExample(
+                        "Почтовый сервис недоступен",
+                        value={
+                            "detail": (
+                                "Не удалось отправить код подтверждения. "
+                                "Попробуйте позже."
+                            )
+                        },
+                        response_only=True,
+                    )
+                ],
+            ),
         },
+        examples=[
+            OpenApiExample(
+                "Новая регистрация",
+                value={
+                    "email": "anna@example.test",
+                    "name": "Анна",
+                    "password": "Example-password-123!",
+                    "password_confirm": "Example-password-123!",
+                },
+                request_only=True,
+            )
+        ],
     )
     def post(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -192,15 +413,54 @@ class VerifyEmailView(APIView):
     parser_classes = (JSONParser,)
 
     @extend_schema(
+        operation_id="auth_verify_email",
+        summary="Подтвердить email",
+        description=(
+            "Проверяет код незавершённой регистрации и создаёт обычного "
+            "пользователя. После "
+            f"{settings.REGISTRATION_MAX_ATTEMPTS} неверных попыток код "
+            "блокируется. Токены и refresh-cookie не выдаются."
+        ),
+        tags=[AUTH_TAG],
+        auth=[],
         request=VerifyEmailSerializer,
         responses={
-            201: UserSerializer,
+            201: OpenApiResponse(
+                response=UserSerializer,
+                description="Email подтверждён, пользователь создан.",
+                examples=[
+                    OpenApiExample(
+                        "Созданный пользователь",
+                        value={**EXAMPLE_USER, "last_login": None},
+                        response_only=True,
+                    )
+                ],
+            ),
             400: OpenApiResponse(
+                response=VALIDATION_ERROR_SCHEMA,
                 description=(
                     "Заявка или код недействительны, либо email уже занят."
-                )
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Неверный код",
+                        value={"code": "Неверный код подтверждения."},
+                        response_only=True,
+                    )
+                ],
+            ),
+            415: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Тело запроса передано не как JSON.",
             ),
         },
+        examples=[
+            OpenApiExample(
+                "Код из письма",
+                value={"email": "anna@example.test", "code": "123456"},
+                request_only=True,
+            )
+        ],
     )
     def post(self, request):
         serializer = VerifyEmailSerializer(data=request.data)
@@ -295,6 +555,59 @@ class LoginView(APIView):
     authentication_classes = []
     permission_classes = (AllowAny,)
 
+    @extend_schema(
+        operation_id="auth_login",
+        summary="Войти",
+        description=(
+            "Проверяет email и пароль, возвращает access-токен и пользователя, "
+            "а также устанавливает HttpOnly refresh-cookie. JavaScript получает "
+            "только JSON-ответ и не читает refresh-токен напрямую."
+        ),
+        tags=[AUTH_TAG],
+        auth=[],
+        request=LoginSerializer,
+        parameters=[SET_REFRESH_COOKIE_HEADER],
+        responses={
+            200: OpenApiResponse(
+                response=AuthSessionSerializer,
+                description="Сессия создана.",
+                examples=[
+                    OpenApiExample(
+                        "Успешный вход",
+                        value=EXAMPLE_SESSION,
+                        response_only=True,
+                    )
+                ],
+            ),
+            400: OpenApiResponse(
+                response=VALIDATION_ERROR_SCHEMA,
+                description="Данные отсутствуют или email и пароль не подошли.",
+                examples=[
+                    OpenApiExample(
+                        "Неверные данные",
+                        value={
+                            "non_field_errors": ["Неверный email или пароль."]
+                        },
+                        response_only=True,
+                    )
+                ],
+            ),
+            415: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Неподдерживаемый Content-Type запроса.",
+            ),
+        },
+        examples=[
+            OpenApiExample(
+                "Данные входа",
+                value={
+                    "email": "anna@example.test",
+                    "password": "Example-password-123!",
+                },
+                request_only=True,
+            )
+        ],
+    )
     def post(self, request):
         serializer = LoginSerializer(data=request.data, context={"request": request})
         serializer.is_valid(raise_exception=True)
@@ -307,6 +620,52 @@ class RefreshView(APIView):
     authentication_classes = []
     permission_classes = (AllowAny,)
 
+    @extend_schema(
+        operation_id="auth_refresh",
+        summary="Обновить сессию",
+        description=(
+            "Читает HttpOnly refresh-cookie, блокирует использованный refresh-"
+            "токен, возвращает новый access-токен и пользователя и заменяет "
+            "refresh-cookie. Тело запроса не используется. Swagger UI не может "
+            "задать заголовок Cookie вручную: браузер отправит cookie, полученную "
+            "от login, автоматически."
+        ),
+        tags=[AUTH_TAG],
+        auth=[],
+        request=None,
+        parameters=[
+            REFRESH_COOKIE_REQUIRED,
+            SET_REFRESH_COOKIE_HEADER,
+            CLEAR_INVALID_REFRESH_COOKIE_HEADER,
+        ],
+        responses={
+            200: OpenApiResponse(
+                response=AuthSessionSerializer,
+                description="Токены обновлены.",
+                examples=[
+                    OpenApiExample(
+                        "Обновлённая сессия",
+                        value=EXAMPLE_SESSION,
+                        response_only=True,
+                    )
+                ],
+            ),
+            401: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description=(
+                    "Refresh-cookie отсутствует, недействительна, просрочена "
+                    "или принадлежит неактивному пользователю."
+                ),
+                examples=[
+                    OpenApiExample(
+                        "Cookie отсутствует",
+                        value={"detail": "Refresh-токен отсутствует."},
+                        response_only=True,
+                    )
+                ],
+            ),
+        },
+    )
     def post(self, request):
         refresh_value = request.COOKIES.get(REFRESH_COOKIE)
         if not refresh_value:
@@ -338,6 +697,32 @@ class LogoutView(APIView):
     authentication_classes = []
     permission_classes = (AllowAny,)
 
+    @extend_schema(
+        operation_id="auth_logout",
+        summary="Выйти",
+        description=(
+            "Если refresh-cookie содержит пригодный токен, добавляет его в "
+            "blacklist. Независимо от наличия и состояния токена удаляет cookie "
+            "и возвращает успешный ответ. Тело запроса игнорируется."
+        ),
+        tags=[AUTH_TAG],
+        auth=[],
+        request=None,
+        parameters=[REFRESH_COOKIE_OPTIONAL, CLEAR_LOGOUT_COOKIE_HEADER],
+        responses={
+            200: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Локальная refresh-cookie удалена.",
+                examples=[
+                    OpenApiExample(
+                        "Успешный выход",
+                        value={"detail": "Вы вышли из аккаунта."},
+                        response_only=True,
+                    )
+                ],
+            )
+        },
+    )
     def post(self, request):
         refresh_value = request.COOKIES.get(REFRESH_COOKIE)
 

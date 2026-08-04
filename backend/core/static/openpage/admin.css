@@ -1,0 +1,204 @@
+:root,
+html[data-theme="light"] {
+  --primary: #7542da;
+  --secondary: #9c4f83;
+  --accent: #f8dce9;
+  --primary-fg: #ffffff;
+  --body-fg: #382f3f;
+  --body-bg: #fff9fc;
+  --body-quiet-color: #756978;
+  --body-loud-color: #211b25;
+  --header-color: #ffffff;
+  --header-branding-color: #ffffff;
+  --header-bg: #7542da;
+  --header-link-color: #ffffff;
+  --breadcrumbs-fg: #5e5263;
+  --breadcrumbs-link-fg: #7542da;
+  --breadcrumbs-bg: #f8eaf1;
+  --link-fg: #7441a4;
+  --link-hover-color: #9c3f73;
+  --link-selected-fg: #5d2e83;
+  --hairline-color: #eadce6;
+  --border-color: #ddcbd8;
+  --error-fg: #a32f59;
+  --message-success-bg: #e6f4ed;
+  --message-warning-bg: #fff3d9;
+  --message-error-bg: #fbe4ec;
+  --darkened-bg: #faf0f5;
+  --selected-bg: #f5e2ec;
+  --selected-row: #fff0f6;
+  --button-fg: #ffffff;
+  --button-bg: #7542da;
+  --button-hover-bg: #6333bd;
+  --default-button-bg: #9c4f83;
+  --default-button-hover-bg: #833d6b;
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --primary: #b998ff;
+  --secondary: #d17ca8;
+  --accent: #f0c2d8;
+  --primary-fg: #ffffff;
+  --body-fg: #eee8f0;
+  --body-bg: #120f16;
+  --body-quiet-color: #b9aebb;
+  --body-loud-color: #ffffff;
+  --header-color: #ffffff;
+  --header-branding-color: #ffffff;
+  --header-bg: #25192e;
+  --header-link-color: #ffffff;
+  --breadcrumbs-fg: #d9cddc;
+  --breadcrumbs-link-fg: #d4baff;
+  --breadcrumbs-bg: #1c1721;
+  --link-fg: #c7a8ff;
+  --link-hover-color: #f0a9cc;
+  --link-selected-fg: #e0caff;
+  --hairline-color: #352c3c;
+  --border-color: #493c50;
+  --error-fg: #ff9abd;
+  --message-success-bg: #183528;
+  --message-warning-bg: #473a1d;
+  --message-error-bg: #492431;
+  --darkened-bg: #1a161f;
+  --selected-bg: #302438;
+  --selected-row: #291e30;
+  --button-fg: #ffffff;
+  --button-bg: #8153dc;
+  --button-hover-bg: #956be5;
+  --default-button-bg: #a85180;
+  --default-button-hover-bg: #bd6996;
+  color-scheme: dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] {
+    --primary: #b998ff;
+    --secondary: #d17ca8;
+    --accent: #f0c2d8;
+    --body-fg: #eee8f0;
+    --body-bg: #120f16;
+    --body-quiet-color: #b9aebb;
+    --body-loud-color: #ffffff;
+    --header-bg: #25192e;
+    --breadcrumbs-fg: #d9cddc;
+    --breadcrumbs-link-fg: #d4baff;
+    --breadcrumbs-bg: #1c1721;
+    --link-fg: #c7a8ff;
+    --link-hover-color: #f0a9cc;
+    --hairline-color: #352c3c;
+    --border-color: #493c50;
+    --darkened-bg: #1a161f;
+    --selected-bg: #302438;
+    --selected-row: #291e30;
+    color-scheme: dark;
+  }
+}
+
+body {
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+#header {
+  background: linear-gradient(110deg, #6f3de2, #9c4f83);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 12%);
+}
+
+#site-name a {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--header-branding-color);
+  font-weight: 700;
+}
+
+#site-name img {
+  width: 26px;
+  height: 22px;
+}
+
+#content h1 {
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.module,
+.inline-group,
+#changelist-filter,
+.login #container {
+  border: 1px solid var(--hairline-color);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 8px 28px rgb(65 34 67 / 7%);
+}
+
+.module h2,
+.module caption,
+.inline-group h2 {
+  background: var(--secondary);
+}
+
+input,
+textarea,
+select,
+.selector-available,
+.selector-chosen {
+  border-radius: 7px;
+}
+
+.button,
+input[type="submit"],
+input[type="button"],
+.submit-row input,
+a.button {
+  border-radius: 8px;
+}
+
+tr.selected,
+tr:has(input.action-select:checked) {
+  background: var(--selected-row);
+}
+
+.messagelist li {
+  border-radius: 8px;
+}
+
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #e187b2;
+  outline-offset: 2px;
+}
+
+.login {
+  background: radial-gradient(circle at top, #f9e4ef 0, var(--body-bg) 48%);
+}
+
+.login #container {
+  background: var(--body-bg);
+}
+
+html[data-theme="dark"] .login {
+  background: var(--body-bg);
+}
+
+@media (prefers-color-scheme: dark) {
+  html[data-theme="auto"] .login {
+    background: var(--body-bg);
+  }
+}
+
+@media (max-width: 767px) {
+  #site-name img {
+    width: 23px;
+    height: 19px;
+  }
+
+  .module,
+  .inline-group,
+  #changelist-filter {
+    border-radius: 8px;
+  }
+}

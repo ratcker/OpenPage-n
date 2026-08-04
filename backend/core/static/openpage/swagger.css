@@ -1,0 +1,184 @@
+:root {
+  color-scheme: light;
+  --op-bg: #fff9fc;
+  --op-surface: #ffffff;
+  --op-border: #eadce6;
+  --op-text: #382f3f;
+  --op-muted: #756978;
+  --op-purple: #7542da;
+  --op-purple-dark: #6333bd;
+  --op-pink: #9c4f83;
+  --op-focus: #e187b2;
+}
+
+body {
+  background: var(--op-bg) !important;
+  color: var(--op-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.openpage-docs-header {
+  min-height: 68px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px clamp(18px, 4vw, 48px);
+  border-bottom: 1px solid var(--op-border);
+  background: rgb(255 255 255 / 94%);
+}
+
+.openpage-docs-header img {
+  width: 28px;
+  height: 24px;
+}
+
+.openpage-docs-header div {
+  display: grid;
+  gap: 2px;
+}
+
+.openpage-docs-header strong {
+  color: var(--op-text);
+  font-size: 15px;
+}
+
+.openpage-docs-header span {
+  color: var(--op-muted);
+  font-size: 12px;
+}
+
+.swagger-ui {
+  color: var(--op-text);
+  font-family: inherit;
+}
+
+.swagger-ui .topbar {
+  display: none;
+}
+
+.swagger-ui .wrapper {
+  max-width: 1180px;
+  padding-inline: clamp(16px, 4vw, 40px);
+}
+
+.swagger-ui .info {
+  margin-block: 34px 26px;
+}
+
+.swagger-ui .info .title,
+.swagger-ui .info p,
+.swagger-ui .info li,
+.swagger-ui .opblock-tag,
+.swagger-ui .opblock .opblock-summary-description,
+.swagger-ui .responses-inner h4,
+.swagger-ui .responses-inner h5,
+.swagger-ui .model-title,
+.swagger-ui table thead tr td,
+.swagger-ui table thead tr th,
+.swagger-ui label,
+.swagger-ui .parameter__name,
+.swagger-ui .response-col_status {
+  color: var(--op-text);
+}
+
+.swagger-ui .info .title {
+  letter-spacing: -0.025em;
+}
+
+.swagger-ui .info .title small pre {
+  background: #f4e8f0;
+  color: var(--op-pink);
+}
+
+.swagger-ui .scheme-container {
+  margin-block: 0 30px;
+  border: 1px solid var(--op-border);
+  border-radius: 12px;
+  background: var(--op-surface);
+  box-shadow: 0 8px 28px rgb(65 34 67 / 7%);
+}
+
+.swagger-ui .opblock-tag {
+  border-bottom-color: var(--op-border);
+}
+
+.swagger-ui .opblock {
+  border-radius: 10px;
+  box-shadow: none;
+  overflow: hidden;
+}
+
+.swagger-ui .opblock .opblock-summary {
+  min-height: 54px;
+}
+
+.swagger-ui .opblock-body,
+.swagger-ui .model-box,
+.swagger-ui section.models,
+.swagger-ui .responses-table tbody tr.response,
+.swagger-ui .modal-ux {
+  color: var(--op-text);
+  background: var(--op-surface);
+}
+
+.swagger-ui section.models {
+  border-color: var(--op-border);
+  border-radius: 10px;
+}
+
+.swagger-ui input[type="text"],
+.swagger-ui input[type="password"],
+.swagger-ui input[type="email"],
+.swagger-ui textarea,
+.swagger-ui select {
+  border-color: #cfbdca;
+  border-radius: 7px;
+  color: var(--op-text);
+  background: var(--op-surface);
+}
+
+.swagger-ui .btn {
+  border-radius: 8px;
+}
+
+.swagger-ui .btn.authorize {
+  border-color: var(--op-purple);
+  color: var(--op-purple);
+}
+
+.swagger-ui .btn.execute {
+  border-color: var(--op-purple);
+  background: var(--op-purple);
+}
+
+.swagger-ui .btn.execute:hover {
+  background: var(--op-purple-dark);
+}
+
+.swagger-ui a,
+.swagger-ui .model-toggle::after {
+  color: var(--op-purple);
+}
+
+.swagger-ui button:focus-visible,
+.swagger-ui a:focus-visible,
+.swagger-ui input:focus-visible,
+.swagger-ui select:focus-visible,
+.swagger-ui textarea:focus-visible {
+  outline: 3px solid var(--op-focus);
+  outline-offset: 2px;
+}
+
+@media (max-width: 600px) {
+  .openpage-docs-header {
+    min-height: 60px;
+  }
+
+  .swagger-ui .info {
+    margin-top: 24px;
+  }
+
+  .swagger-ui .opblock .opblock-summary-description {
+    display: none;
+  }
+}

@@ -55,7 +55,7 @@ ROOT_URLCONF = "config.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
@@ -146,8 +146,31 @@ REST_FRAMEWORK = {
 
 SPECTACULAR_SETTINGS = {
     "TITLE": "Опенпейч API",
-    "DESCRIPTION": "Схема API ядра Опенпейч.",
+    "DESCRIPTION": (
+        "Контракт существующего API платформы Опенпейч. Access-токен передаётся "
+        "в заголовке `Authorization: Bearer <access-token>`. Refresh-токен "
+        "хранится только в HttpOnly-cookie и не возвращается в JSON."
+    ),
     "VERSION": "0.1.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "TAGS": [
+        {
+            "name": "Авторизация",
+            "description": "Регистрация, пользовательская сессия и профиль.",
+        },
+        {
+            "name": "Состояние",
+            "description": "Простая проверка доступности процесса API.",
+        },
+    ],
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "displayRequestDuration": True,
+        "docExpansion": "list",
+        "filter": True,
+        "persistAuthorization": False,
+    },
+    "SWAGGER_UI_FAVICON_HREF": "/static/openpage/mark.svg",
 }
 
 # JWT

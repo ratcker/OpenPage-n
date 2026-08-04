@@ -14,6 +14,29 @@ class UserSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "date_joined", "last_login"]
 
 
+class AuthSessionSerializer(serializers.Serializer):
+    access = serializers.CharField(read_only=True)
+    user = UserSerializer(read_only=True)
+
+
+class DetailResponseSerializer(serializers.Serializer):
+    detail = serializers.CharField(read_only=True)
+
+
+class TokenErrorMessageSerializer(serializers.Serializer):
+    token_class = serializers.CharField(read_only=True)
+    token_type = serializers.CharField(read_only=True)
+    message = serializers.CharField(read_only=True)
+
+
+class InvalidTokenErrorSerializer(DetailResponseSerializer):
+    code = serializers.CharField(read_only=True)
+    messages = TokenErrorMessageSerializer(
+        many=True,
+        read_only=True,
+    )
+
+
 # Регистрация
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()

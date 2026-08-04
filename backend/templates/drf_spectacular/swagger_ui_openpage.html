@@ -1,0 +1,18 @@
+{% extends "drf_spectacular/swagger_ui.html" %}
+{% load static %}
+
+{% block head %}
+  {{ block.super }}
+  <link rel="stylesheet" href="{% static 'openpage/swagger.css' %}">
+{% endblock %}
+
+{% block body %}
+  <header class="openpage-docs-header">
+    <img src="{% static 'openpage/mark.svg' %}" alt="">
+    <div>
+      <strong>Опенпейч API</strong>
+      <span>Интерактивная документация</span>
+    </div>
+  </header>
+  {{ block.super }}
+{% endblock %}
