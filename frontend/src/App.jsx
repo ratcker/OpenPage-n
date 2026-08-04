@@ -1,4 +1,9 @@
-import { Navigate, Route, Routes } from 'react-router-dom';
+import {
+  Navigate,
+  Route,
+  Routes,
+  useLocation,
+} from 'react-router-dom';
 
 import ProtectedRoute, { SessionLoading } from './auth/ProtectedRoute.jsx';
 import useAuth from './auth/useAuth.js';
@@ -10,9 +15,11 @@ import ProfilePage from './pages/ProfilePage/ProfilePage.jsx';
 // Авторизованному пользователю форма входа уже не нужна.
 function LoginRoute() {
   const { status } = useAuth();
+  const location = useLocation();
+  const destination = location.state?.from || '/hub';
 
   if (status === 'loading') return <SessionLoading />;
-  if (status === 'authenticated') return <Navigate to="/profile" replace />;
+  if (status === 'authenticated') return <Navigate to={destination} replace />;
   return <LoginPage />;
 }
 

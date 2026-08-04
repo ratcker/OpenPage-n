@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react';
 // React-плагин
 export default defineConfig({
   plugins: [react()],
+  test: {
+    environment: 'jsdom',
+    setupFiles: './src/test/setup.js',
+  },
   server: {
     // Браузер обращается к API через тот же origin.
     proxy: {
