@@ -1,12 +1,16 @@
 services:
   backend:
-    build: ./backend
+    build:
+      context: ./backend
+      target: development
     env_file: .env
     ports: ["8000:8000"]
     volumes: ["./backend:/app"]
 
   frontend:
-    build: ./frontend
+    build:
+      context: ./frontend
+      target: development
     depends_on: [backend]
     env_file: .env
     environment:
