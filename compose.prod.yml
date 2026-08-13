@@ -23,9 +23,7 @@ services:
     restart: unless-stopped
 
   backend:
-    build:
-      context: ./backend
-      target: production
+    image: ghcr.io/ratcker/openpage-backend:main
     env_file: 
       - .env.prod
     depends_on:
@@ -40,9 +38,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
-      target: production
+    image: ghcr.io/ratcker/openpage-frontend:main
     healthcheck:
       test: ["CMD", "wget", "-q", "--spider", "http://localhost:8080"]
       interval: 10s
