@@ -27,7 +27,7 @@ jobs:
           DJANGO_DEBUG: "True"
           DJANGO_DATABASE_ENGINE: sqlite3
           DJANGO_SECRET_KEY: ci-only-secret-key
-    frontend-tests:
+  frontend-tests:
     runs-on: ubuntu-latest
     defaults:
       run:
