@@ -1,3 +1,4 @@
+name: openpage-n
 services:
   postgres:
     image: postgres:17-alpine
@@ -52,7 +53,7 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
     depends_on:
       backend:
         condition: service_healthy
