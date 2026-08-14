@@ -1,4 +1,11 @@
-:8080 {
+xn--e1aamodgc0e.xn--p1ai {
+    tls {
+        dns regru {
+            username {env.REGRU_USERNAME}
+            password {env.REGRU_PASSWORD}
+        }
+    }
+
     handle /api/* {
         reverse_proxy backend:8000
     }

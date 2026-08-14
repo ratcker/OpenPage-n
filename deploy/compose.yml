@@ -50,10 +50,15 @@ services:
 
   gateway:
     image: ghcr.io/ratcker/openpage-gateway:main
+    environment:
+      REGRU_USERNAME: ${REGRU_USERNAME}
+      REGRU_PASSWORD: ${REGRU_PASSWORD}
     ports:
-      - "8080:8080"
+      - "8443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       backend:
         condition: service_healthy
@@ -63,3 +68,5 @@ services:
 
 volumes:
   postgres_data:    
+  caddy_data:
+  caddy_config:

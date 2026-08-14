@@ -109,9 +109,11 @@ fi
 
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
+gateway_container_after_up="$("${compose[@]}" ps -q gateway)"
 
 # Изменение bind-mounted Caddyfile требует явного пересоздания gateway.
-if [[ "$caddy_changed" == true ]]; then
+if [[ "$caddy_changed" == true &&
+        "$gateway_container" == "$gateway_container_after_up" ]]; then
     "${compose[@]}" up \
     -d \
     --force-recreate \
