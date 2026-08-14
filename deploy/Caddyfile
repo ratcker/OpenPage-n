@@ -4,6 +4,8 @@ xn--e1aamodgc0e.xn--p1ai {
             username {env.REGRU_USERNAME}
             password {env.REGRU_PASSWORD}
         }
+    propagation_delay 90s
+    propagation_timeout 10m
     }
 
     handle /api/* {
