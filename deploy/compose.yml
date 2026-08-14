@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
 
   gateway:
-    image: caddy:2-alpine
+    image: ghcr.io/ratcker/openpage-gateway:main
     ports:
       - "8080:8080"
     volumes:
