@@ -1,0 +1,3 @@
+creation_rules:
+  - path_regex: deploy/\.env\.prod$
+    age: age1emvgwtv2x3u9my0c79huejfqr4nsxl66tnas85w0gq7wmt0vu9gstjxjjy

@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodically reconcile OpenPage production
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=25min
+Persistent=true
+Unit=openpage-reconcile.service
+
+[Install]
+WantedBy=timers.target

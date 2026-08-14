@@ -1,0 +1,11 @@
+[Unit]
+Description=Reconcile OpenPage production Deployment
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=ratcker
+WorkingDirectory=/opt/openpage
+ExecStart=/opt/openpage/deploy/reconcile.sh

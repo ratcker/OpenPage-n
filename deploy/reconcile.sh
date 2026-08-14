@@ -10,6 +10,21 @@ old_revision="$(git rev-parse HEAD)"
 git pull --ff-only origin main
 new_revision="$(git rev-parse HEAD)"
 
+env_tmp="$(mktemp "$deploy_dir/.env.prod.XXXXXX")" #создание нового файла .env.prod без перезаписывания старого
+chmod 600 "$env_tmp"
+cleanup() {
+    rm -f "$env_tmp"
+}
+trap cleanup EXIT
+#дешифровка секретов из гит
+sops decrypt \
+    --input-type dotenv \
+    --output-type dotenv \
+    "$deploy_dir/.env.prod.sops" > "$env_tmp"
+mv -f "$env_tmp" "$deploy_dir/.env.prod"
+trap - EXIT
+
+
 compose=(
     docker compose
     --env-file "$deploy_dir/.env.prod"
