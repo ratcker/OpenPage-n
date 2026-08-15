@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -Eeuo pipefail
 umask 077
-deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 backup_dir="${OPENPAGE_BACKUP_DIR:-/var/backups/openpage}"
 retention_days="${BACKUP_RETENTION_DAYS:-7}"
 compose=(

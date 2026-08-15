@@ -8,4 +8,4 @@ Type=oneshot
 User=ratcker
 Group=ratcker
 WorkingDirectory=/opt/openpage
-ExecStart=/opt/openpage/deploy/backup.sh
+ExecStart=/opt/openpage/deploy/scripts/backup.sh

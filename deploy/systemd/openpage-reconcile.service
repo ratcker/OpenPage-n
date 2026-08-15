@@ -8,4 +8,4 @@ Wants=network-online.target
 Type=oneshot
 User=ratcker
 WorkingDirectory=/opt/openpage
-ExecStart=/opt/openpage/deploy/reconcile.sh
+ExecStart=/opt/openpage/deploy/scripts/reconcile.sh

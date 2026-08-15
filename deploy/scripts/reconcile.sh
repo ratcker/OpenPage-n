@@ -2,7 +2,7 @@
 set -Eeuo pipefail
 
 # Определяем пути и обновляем локальную ветку main.
-deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+deploy_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 repo_dir="$(dirname "$deploy_dir")"
 
 cd "$repo_dir"
@@ -95,7 +95,7 @@ fi
 
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
-"$deploy_dir/smoke-test.sh"
+"$deploy_dir/scripts/smoke-test.sh"
 
 echo "Production reconciliation completed."
 "${compose[@]}" ps
