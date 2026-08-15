@@ -93,13 +93,3 @@ jobs:
           tags: |
             ghcr.io/${{ github.repository_owner }}/openpage-frontend:${{ github.sha }}
             ghcr.io/${{ github.repository_owner }}/openpage-frontend:main
-
-      - name: Build and push gateway image
-        uses: docker/build-push-action@v6
-        with:
-          context: ./gateway
-          push: ${{ github.event_name == 'push' }}
-          tags: |
-            ghcr.io/${{ github.repository_owner }}/openpage-gateway:${{ github.sha }}
-            ghcr.io/${{ github.repository_owner }}/openpage-gateway:main
-            

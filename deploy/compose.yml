@@ -49,12 +49,11 @@ services:
     restart: unless-stopped
 
   gateway:
-    image: ghcr.io/ratcker/openpage-gateway:main
-    environment:
-      REGRU_USERNAME: ${REGRU_USERNAME}
-      REGRU_PASSWORD: ${REGRU_PASSWORD}
+    image: caddy:2-alpine
     ports:
-      - "8443:443"
+      - "443:443"
+      - "80:80"
+      - "443:443/udp"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data

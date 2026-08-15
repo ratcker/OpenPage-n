@@ -35,11 +35,9 @@ compose=(
 # Запоминаем image ID запущенных контейнеров до обновления.
 backend_container="$("${compose[@]}" ps -q backend)"
 frontend_container="$("${compose[@]}" ps -q frontend)"
-gateway_container="$("${compose[@]}" ps -q gateway)"
 
 backend_before=""
 frontend_before=""
-gateway_before=""
 
 if [[ -n "$backend_container" ]]; then
     backend_before="$(docker inspect --format '{{.Image}}' "$backend_container")"
@@ -47,10 +45,6 @@ fi
 
 if [[ -n "$frontend_container" ]]; then
     frontend_before="$(docker inspect --format '{{.Image}}' "$frontend_container")"
-fi
-
-if [[ -n "$gateway_container" ]]; then
-    gateway_before="$(docker inspect --format '{{.Image}}' "$gateway_container")"
 fi
 
 # Загружаем актуальные образы и получаем их новые image ID.
@@ -61,15 +55,11 @@ backend_after="$(docker image inspect \
 frontend_after="$(docker image inspect \
     ghcr.io/ratcker/openpage-frontend:main \
     --format '{{.Id}}')"
-gateway_after="$(docker image inspect \
-    ghcr.io/ratcker/openpage-gateway:main \
-    --format '{{.Id}}')"
 
 backend_changed=false
 frontend_changed=false
 config_changed=false
 caddy_changed=false
-gateway_changed=false
 
 # Сравниваем запущенные и загруженные версии образов.
 if [[ "$backend_before" != "$backend_after" ]];then
@@ -77,9 +67,6 @@ if [[ "$backend_before" != "$backend_after" ]];then
 fi
 if [[ "$frontend_before" != "$frontend_after" ]]; then
     frontend_changed=true
-fi
-if [[ "$gateway_before" != "$gateway_after" ]]; then
-    gateway_changed=true
 fi
 
 # Проверяем изменения deployment-конфигурации между ревизиями Git.
@@ -93,7 +80,6 @@ fi
 # Завершаемся раньше, если обновлять нечего.
 if [[ "$backend_changed" == false &&
       "$frontend_changed" == false &&
-      "$gateway_changed" == false &&
       "$config_changed" == false &&
       "$caddy_changed" == false ]]; then
     echo "Production is already up to date."
@@ -109,18 +95,6 @@ fi
 
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
-gateway_container_after_up="$("${compose[@]}" ps -q gateway)"
-
-# Изменение bind-mounted Caddyfile требует явного пересоздания gateway.
-if [[ "$caddy_changed" == true &&
-        "$gateway_container" == "$gateway_container_after_up" ]]; then
-    "${compose[@]}" up \
-    -d \
-    --force-recreate \
-    --wait \
-    --wait-timeout 120 \
-    gateway
-fi
 
 echo "Production reconciliation completed."
 "${compose[@]}" ps

@@ -1,13 +1,4 @@
 xn--e1aamodgc0e.xn--p1ai {
-    tls {
-        dns regru {
-            username {env.REGRU_USERNAME}
-            password {env.REGRU_PASSWORD}
-        }
-    propagation_delay 90s
-    propagation_timeout 10m
-    }
-
     handle /api/* {
         reverse_proxy backend:8000
     }
