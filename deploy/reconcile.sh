@@ -95,6 +95,7 @@ fi
 
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
+"$deploy_dir/smoke-test.sh"
 
 echo "Production reconciliation completed."
 "${compose[@]}" ps
