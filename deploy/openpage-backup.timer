@@ -1,0 +1,11 @@
+[Unit]
+Description=Run OpenPage PostgreSQL backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+RandomizedDelaySec=10m
+Persistent=true
+Unit=openpage-backup.service
+
+[Install]
+WantedBy=timers.target
