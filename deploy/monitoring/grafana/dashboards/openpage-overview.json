@@ -1,0 +1,887 @@
+{
+  "annotations": {"list": [{"builtIn": 1, "datasource": {"type": "grafana", "uid": "-- Grafana --"}, "enable": true, "hide": true, "iconColor": "#FF5CA8", "name": "Annotations & Alerts", "type": "dashboard"}]},
+  "description": "Production overview for the OpenPage host, application containers, PostgreSQL container and monitoring stack. Uses only Prometheus, node-exporter and cAdvisor metrics.",
+  "editable": false,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "collapsed": false,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "panels": [],
+      "title": "Production status",
+      "type": "row"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Percentage of configured Prometheus targets currently reporting up. See Monitoring health for the up/total breakdown.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 0, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 99}, {"color": "green", "value": 100}]}, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 3, "x": 0, "y": 1},
+      "id": 2,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum(up) / count(up)", "instant": true, "legendFormat": "Up / total", "range": false, "refId": "A"}],
+      "title": "Targets healthy",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Current Docker containers reported by cAdvisor. Empty names and the root cgroup are excluded; No data is retained when cAdvisor is down.",
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "#FF5CA8", "mode": "fixed"}, "decimals": 0, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "#FF5CA8", "value": null}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 3, "x": 3, "y": 1},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "count(count(container_last_seen{job=\"cadvisor\", name!=\"\", name!=\"/\", id!=\"/\"}) by (name)) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "Running", "range": false, "refId": "A"}],
+      "title": "Docker containers",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Expected OpenPage containers currently observed by cAdvisor. Four is healthy.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 0, "mappings": [], "max": 4, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 3}, {"color": "green", "value": 4}]}}, "overrides": []},
+      "gridPos": {"h": 5, "w": 3, "x": 6, "y": 1},
+      "id": 4,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "count(count(container_last_seen{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}) by (name)) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "Running", "range": false, "refId": "A"}],
+      "title": "OpenPage containers",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"fixedColor": "#E84A8A", "mode": "fixed"}, "decimals": 0, "mappings": [], "unit": "s"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 3, "x": 9, "y": 1},
+      "id": 5,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_time_seconds{job=\"node-exporter\", instance=\"$node_instance\"} - node_boot_time_seconds{job=\"node-exporter\", instance=\"$node_instance\"}", "instant": true, "legendFormat": "Uptime", "range": false, "refId": "A"}],
+      "title": "Host uptime",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 1, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 70}, {"color": "red", "value": 90}]}, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 3, "x": 12, "y": 1},
+      "id": 6,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * (1 - avg(rate(node_cpu_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", mode=\"idle\"}[$__rate_interval])))", "instant": false, "legendFormat": "Used", "range": true, "refId": "A"}],
+      "title": "Host CPU",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 1, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 3, "x": 15, "y": 1},
+      "id": 7,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"node-exporter\", instance=\"$node_instance\"} / node_memory_MemTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"})", "instant": false, "legendFormat": "Used", "range": true, "refId": "A"}],
+      "title": "Host RAM",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 1, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 3, "x": 18, "y": 1},
+      "id": 8,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * (1 - node_filesystem_avail_bytes{job=\"node-exporter\", instance=\"$node_instance\", mountpoint=\"/\", fstype!~\"rootfs|tmpfs|overlay\"} / node_filesystem_size_bytes{job=\"node-exporter\", instance=\"$node_instance\", mountpoint=\"/\", fstype!~\"rootfs|tmpfs|overlay\"})", "instant": false, "legendFormat": "Used", "range": true, "refId": "A"}],
+      "title": "Root filesystem",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "description": "Swap usage is shown only when the host has swap configured; otherwise the panel remains No data.",
+      "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 1, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 25}, {"color": "red", "value": 60}]}, "unit": "percent"}, "overrides": []},
+      "gridPos": {"h": 5, "w": 3, "x": 21, "y": 1},
+      "id": 9,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+      "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * (node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} - node_memory_SwapFree_bytes{job=\"node-exporter\", instance=\"$node_instance\"}) / node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} and node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} > 0", "instant": false, "legendFormat": "Used", "range": true, "refId": "A"}],
+      "title": "Swap",
+      "transparent": true,
+      "type": "stat"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 6},
+      "id": 10,
+      "panels": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Non-idle CPU time split by operationally relevant modes.",
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false, "stacking": {"group": "A", "mode": "none"}}, "decimals": 1, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 14, "x": 0, "y": 7},
+          "id": 11,
+          "options": {"legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * avg(rate(node_cpu_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", mode=\"user\"}[$__rate_interval]))", "legendFormat": "user", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * avg(rate(node_cpu_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", mode=\"system\"}[$__rate_interval]))", "legendFormat": "system", "range": true, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * avg(rate(node_cpu_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", mode=\"iowait\"}[$__rate_interval]))", "legendFormat": "iowait", "range": true, "refId": "C"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * avg(rate(node_cpu_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", mode=\"irq\"}[$__rate_interval]))", "legendFormat": "irq", "range": true, "refId": "D"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * avg(rate(node_cpu_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", mode=\"softirq\"}[$__rate_interval]))", "legendFormat": "softirq", "range": true, "refId": "E"}
+          ],
+          "title": "CPU usage by mode",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "decimals": 2, "unit": "short"}, "overrides": [{"matcher": {"id": "byName", "options": "1m"}, "properties": [{"id": "color", "value": {"fixedColor": "#FF5CA8", "mode": "fixed"}}]}]},
+          "gridPos": {"h": 8, "w": 10, "x": 14, "y": 7},
+          "id": 12,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_load1{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "1m", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_load5{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "5m", "range": true, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_load15{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "15m", "range": true, "refId": "C"}
+          ],
+          "title": "Load average",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 15},
+          "id": 13,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_memory_MemTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "Total", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_memory_MemTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} - node_memory_MemAvailable_bytes{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "Used", "range": true, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_memory_MemAvailable_bytes{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "Available", "range": true, "refId": "C"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_memory_Cached_bytes{job=\"node-exporter\", instance=\"$node_instance\"} + node_memory_Buffers_bytes{job=\"node-exporter\", instance=\"$node_instance\"} + node_memory_SReclaimable_bytes{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "Cache + buffers", "range": true, "refId": "D"}
+          ],
+          "title": "Memory capacity",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "No data is expected when swap is not configured.",
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+          "id": 14,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} and node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} > 0", "legendFormat": "Total", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} - node_memory_SwapFree_bytes{job=\"node-exporter\", instance=\"$node_instance\"}) and node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} > 0", "legendFormat": "Used", "range": true, "refId": "B"}
+          ],
+          "title": "Swap capacity",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "Bps"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 23},
+          "id": 15,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_network_receive_bytes_total{job=\"node-exporter\", instance=\"$node_instance\", device!~\"lo|veth.*|docker.*|br-.*|virbr.*\"}[$__rate_interval])", "legendFormat": "{{device}} receive", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_network_transmit_bytes_total{job=\"node-exporter\", instance=\"$node_instance\", device!~\"lo|veth.*|docker.*|br-.*|virbr.*\"}[$__rate_interval])", "legendFormat": "{{device}} transmit", "range": true, "refId": "B"}
+          ],
+          "title": "Network throughput",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 6, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "decimals": 2, "unit": "ops"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 23},
+          "id": 16,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_network_receive_errs_total{job=\"node-exporter\", instance=\"$node_instance\", device!~\"lo|veth.*|docker.*|br-.*|virbr.*\"}[$__rate_interval])", "legendFormat": "{{device}} rx errors", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_network_transmit_errs_total{job=\"node-exporter\", instance=\"$node_instance\", device!~\"lo|veth.*|docker.*|br-.*|virbr.*\"}[$__rate_interval])", "legendFormat": "{{device}} tx errors", "range": true, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_network_receive_drop_total{job=\"node-exporter\", instance=\"$node_instance\", device!~\"lo|veth.*|docker.*|br-.*|virbr.*\"}[$__rate_interval])", "legendFormat": "{{device}} rx drops", "range": true, "refId": "C"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_network_transmit_drop_total{job=\"node-exporter\", instance=\"$node_instance\", device!~\"lo|veth.*|docker.*|br-.*|virbr.*\"}[$__rate_interval])", "legendFormat": "{{device}} tx drops", "range": true, "refId": "D"}
+          ],
+          "title": "Network errors and drops",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "Bps"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 31},
+          "id": 17,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_disk_read_bytes_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])", "legendFormat": "{{device}} read", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_disk_written_bytes_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])", "legendFormat": "{{device}} write", "range": true, "refId": "B"}
+          ],
+          "title": "Disk throughput",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "iops"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 31},
+          "id": 18,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_disk_reads_completed_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])", "legendFormat": "{{device}} read", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_disk_writes_completed_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])", "legendFormat": "{{device}} write", "range": true, "refId": "B"}
+          ],
+          "title": "Disk IOPS",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Average read/write operation latency and device busy time. No data is retained when the underlying counters are absent.",
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "s"}, "overrides": [{"matcher": {"id": "byRegexp", "options": "/busy/"}, "properties": [{"id": "unit", "value": "percentunit"}]}]},
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 31},
+          "id": 19,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_disk_read_time_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval]) / rate(node_disk_reads_completed_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])", "legendFormat": "{{device}} read latency", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_disk_write_time_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval]) / rate(node_disk_writes_completed_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])", "legendFormat": "{{device}} write latency", "range": true, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_disk_io_time_seconds_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])", "legendFormat": "{{device}} busy", "range": true, "refId": "C"}
+          ],
+          "title": "Disk latency and I/O time",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Pseudo filesystems, overlay filesystems and Docker/container mounts are excluded.",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 9, "w": 12, "x": 0, "y": 39},
+          "id": 20,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * (1 - node_filesystem_avail_bytes{job=\"node-exporter\", instance=\"$node_instance\", fstype!~\"rootfs|tmpfs|devtmpfs|overlay|squashfs|nsfs|proc|sysfs|cgroup2?|tracefs|debugfs|securityfs|pstore|autofs|mqueue|hugetlbfs|fusectl|configfs|ramfs\", mountpoint!~\"/var/lib/docker.*|/run/docker.*|/var/lib/containers.*|/run/containers.*|/snap.*\"} / node_filesystem_size_bytes{job=\"node-exporter\", instance=\"$node_instance\", fstype!~\"rootfs|tmpfs|devtmpfs|overlay|squashfs|nsfs|proc|sysfs|cgroup2?|tracefs|debugfs|securityfs|pstore|autofs|mqueue|hugetlbfs|fusectl|configfs|ramfs\", mountpoint!~\"/var/lib/docker.*|/run/docker.*|/var/lib/containers.*|/run/containers.*|/snap.*\"})", "legendFormat": "{{mountpoint}}", "range": true, "refId": "A"}],
+          "title": "Filesystem usage",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 9, "w": 12, "x": 12, "y": 39},
+          "id": 21,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_filesystem_avail_bytes{job=\"node-exporter\", instance=\"$node_instance\", fstype!~\"rootfs|tmpfs|devtmpfs|overlay|squashfs|nsfs|proc|sysfs|cgroup2?|tracefs|debugfs|securityfs|pstore|autofs|mqueue|hugetlbfs|fusectl|configfs|ramfs\", mountpoint!~\"/var/lib/docker.*|/run/docker.*|/var/lib/containers.*|/run/containers.*|/snap.*\"}", "legendFormat": "{{mountpoint}} available", "range": true, "refId": "A"}],
+          "title": "Filesystem available",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 48},
+          "id": 22,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * (1 - node_filesystem_files_free{job=\"node-exporter\", instance=\"$node_instance\", fstype!~\"rootfs|tmpfs|devtmpfs|overlay|squashfs|nsfs|proc|sysfs|cgroup2?|tracefs|debugfs|securityfs|pstore|autofs|mqueue|hugetlbfs|fusectl|configfs|ramfs\", mountpoint!~\"/var/lib/docker.*|/run/docker.*|/var/lib/containers.*|/run/containers.*|/snap.*\"} / node_filesystem_files{job=\"node-exporter\", instance=\"$node_instance\", fstype!~\"rootfs|tmpfs|devtmpfs|overlay|squashfs|nsfs|proc|sysfs|cgroup2?|tracefs|debugfs|securityfs|pstore|autofs|mqueue|hugetlbfs|fusectl|configfs|ramfs\", mountpoint!~\"/var/lib/docker.*|/run/docker.*|/var/lib/containers.*|/run/containers.*|/snap.*\"})", "legendFormat": "{{mountpoint}}", "range": true, "refId": "A"}],
+          "title": "Inode usage",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "decimals": 0, "unit": "short"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 6, "x": 12, "y": 48},
+          "id": 23,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_procs_running{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "Running", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_procs_blocked{job=\"node-exporter\", instance=\"$node_instance\"}", "legendFormat": "Blocked", "range": true, "refId": "B"}
+          ],
+          "title": "Processes",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#FF5CA8", "mode": "fixed"}, "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "cps"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 6, "x": 18, "y": 48},
+          "id": 24,
+          "options": {"legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "single", "sort": "none"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "rate(node_context_switches_total{job=\"node-exporter\", instance=\"$node_instance\"}[$__rate_interval])", "legendFormat": "Context switches", "range": true, "refId": "A"}],
+          "title": "Context switches",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#B877DB", "mode": "fixed"}, "decimals": 0}, "overrides": []},
+          "gridPos": {"h": 5, "w": 6, "x": 0, "y": 56},
+          "id": 25,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "count(count(node_cpu_seconds_total{job=\"node-exporter\", instance=\"$node_instance\"}) by (cpu))", "instant": true, "legendFormat": "Logical CPUs", "range": false, "refId": "A"}],
+          "title": "Logical CPU",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#FF5CA8", "mode": "fixed"}, "decimals": 0, "unit": "s"}, "overrides": []},
+          "gridPos": {"h": 5, "w": 6, "x": 6, "y": 56},
+          "id": 26,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "node_time_seconds{job=\"node-exporter\", instance=\"$node_instance\"} - node_boot_time_seconds{job=\"node-exporter\", instance=\"$node_instance\"}", "instant": true, "legendFormat": "Uptime", "range": false, "refId": "A"}],
+          "title": "Host uptime",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#E84A8A", "mode": "fixed"}, "decimals": 0, "unit": "dateTimeAsIso"}, "overrides": []},
+          "gridPos": {"h": 5, "w": 6, "x": 12, "y": 56},
+          "id": 27,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "1000 * node_boot_time_seconds{job=\"node-exporter\", instance=\"$node_instance\"}", "instant": true, "legendFormat": "Boot time", "range": false, "refId": "A"}],
+          "title": "Boot time",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Allocated host file descriptors as a percentage of the kernel limit.",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 1, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 70}, {"color": "red", "value": 90}]}, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 5, "w": 6, "x": 18, "y": 56},
+          "id": 28,
+          "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * node_filefd_allocated{job=\"node-exporter\", instance=\"$node_instance\"} / node_filefd_maximum{job=\"node-exporter\", instance=\"$node_instance\"}", "instant": false, "legendFormat": "Allocated", "range": true, "refId": "A"}],
+          "title": "File descriptors",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Absolute memory and storage values. Swap rows are absent when swap is not configured; missing source metrics are never replaced with zero.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#FF5CA8", "mode": "fixed"}, "decimals": 2, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 10, "w": 8, "x": 0, "y": 61},
+          "id": 66,
+          "options": {"cellHeight": "md", "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false}, "showHeader": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "label_replace(sum(node_memory_MemTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} - node_memory_MemAvailable_bytes{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"RAM used\", \"\", \"\") or label_replace(sum(node_memory_MemAvailable_bytes{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"RAM available\", \"\", \"\") or label_replace(sum(node_memory_MemTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"RAM total\", \"\", \"\") or label_replace(sum(node_filesystem_size_bytes{job=\"node-exporter\", instance=\"$node_instance\", mountpoint=\"/\", fstype!~\"rootfs|tmpfs|overlay\"} - node_filesystem_avail_bytes{job=\"node-exporter\", instance=\"$node_instance\", mountpoint=\"/\", fstype!~\"rootfs|tmpfs|overlay\"}), \"metric\", \"Root filesystem used\", \"\", \"\") or label_replace(sum(node_filesystem_avail_bytes{job=\"node-exporter\", instance=\"$node_instance\", mountpoint=\"/\", fstype!~\"rootfs|tmpfs|overlay\"}), \"metric\", \"Root filesystem available\", \"\", \"\") or label_replace(sum(node_filesystem_size_bytes{job=\"node-exporter\", instance=\"$node_instance\", mountpoint=\"/\", fstype!~\"rootfs|tmpfs|overlay\"}), \"metric\", \"Root filesystem total\", \"\", \"\") or label_replace((sum(node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"} - node_memory_SwapFree_bytes{job=\"node-exporter\", instance=\"$node_instance\"}) and sum(node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"}) > 0), \"metric\", \"Swap used\", \"\", \"\") or label_replace((sum(node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"}) and sum(node_memory_SwapTotal_bytes{job=\"node-exporter\", instance=\"$node_instance\"}) > 0), \"metric\", \"Swap total\", \"\", \"\")", "format": "table", "instant": true, "legendFormat": "{{metric}}", "range": false, "refId": "A"}],
+          "title": "Capacity snapshot",
+          "transformations": [{"id": "organize", "options": {"excludeByName": {"Time": true}, "indexByName": {"metric": 0, "Value": 1}, "renameByName": {"Value": "Current value", "metric": "Parameter"}}}],
+          "transparent": true,
+          "type": "table"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Current host scheduler and process values. Context switches are a per-second rate; the remaining values are absolute counts or load averages.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#B877DB", "mode": "fixed"}, "decimals": 2, "unit": "short"}, "overrides": []},
+          "gridPos": {"h": 10, "w": 8, "x": 8, "y": 61},
+          "id": 67,
+          "options": {"cellHeight": "md", "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false}, "showHeader": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "label_replace(sum(node_load1{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"Load average — 1 minute\", \"\", \"\") or label_replace(sum(node_load5{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"Load average — 5 minutes\", \"\", \"\") or label_replace(sum(node_load15{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"Load average — 15 minutes\", \"\", \"\") or label_replace(count(count(node_cpu_seconds_total{job=\"node-exporter\", instance=\"$node_instance\"}) by (cpu)), \"metric\", \"Logical CPUs\", \"\", \"\") or label_replace(sum(node_procs_running{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"Processes running\", \"\", \"\") or label_replace(sum(node_procs_blocked{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"Processes blocked\", \"\", \"\") or label_replace(sum(node_filefd_allocated{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"File descriptors allocated\", \"\", \"\") or label_replace(sum(node_filefd_maximum{job=\"node-exporter\", instance=\"$node_instance\"}), \"metric\", \"File descriptors maximum\", \"\", \"\") or label_replace(sum(rate(node_context_switches_total{job=\"node-exporter\", instance=\"$node_instance\"}[$__rate_interval])), \"metric\", \"Context switches / second\", \"\", \"\")", "format": "table", "instant": true, "legendFormat": "{{metric}}", "range": false, "refId": "A"}],
+          "title": "Host activity snapshot",
+          "transformations": [{"id": "organize", "options": {"excludeByName": {"Time": true}, "indexByName": {"metric": 0, "Value": 1}, "renameByName": {"Value": "Current value", "metric": "Parameter"}}}],
+          "transparent": true,
+          "type": "table"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Current aggregate throughput. Virtual/container host interfaces are excluded from network totals; disk totals include physical block devices only.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#E84A8A", "mode": "fixed"}, "decimals": 2, "unit": "Bps"}, "overrides": []},
+          "gridPos": {"h": 10, "w": 8, "x": 16, "y": 61},
+          "id": 68,
+          "options": {"cellHeight": "md", "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false}, "showHeader": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "label_replace(sum(rate(node_network_receive_bytes_total{job=\"node-exporter\", instance=\"$node_instance\", device!~\"lo|veth.*|docker.*|br-.*|virbr.*\"}[$__rate_interval])), \"metric\", \"Network receive\", \"\", \"\") or label_replace(sum(rate(node_network_transmit_bytes_total{job=\"node-exporter\", instance=\"$node_instance\", device!~\"lo|veth.*|docker.*|br-.*|virbr.*\"}[$__rate_interval])), \"metric\", \"Network transmit\", \"\", \"\") or label_replace(sum(rate(node_disk_read_bytes_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])), \"metric\", \"Disk read\", \"\", \"\") or label_replace(sum(rate(node_disk_written_bytes_total{job=\"node-exporter\", instance=\"$node_instance\", device=~\"[a-z]+|nvme[0-9]+n[0-9]+|mmcblk[0-9]+\"}[$__rate_interval])), \"metric\", \"Disk write\", \"\", \"\")", "format": "table", "instant": true, "legendFormat": "{{metric}}", "range": false, "refId": "A"}],
+          "title": "Throughput snapshot",
+          "transformations": [{"id": "organize", "options": {"excludeByName": {"Time": true}, "indexByName": {"metric": 0, "Value": 1}, "renameByName": {"Value": "Current value", "metric": "Parameter"}}}],
+          "transparent": true,
+          "type": "table"
+        }
+      ],
+      "title": "Host overview",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 71},
+     "id": 30,
+      "panels": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "One means observed; zero means missing. If cAdvisor itself is down, the panel remains No data instead of reporting all containers missing.",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 0, "mappings": [{"options": {"0": {"color": "red", "text": "Missing"}, "1": {"color": "green", "text": "Running"}}, "type": "value"}], "max": 1, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 6, "w": 24, "x": 0, "y": 72},
+         "id": 31,
+          "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-backend-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "backend", "range": false, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-frontend-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "frontend", "range": false, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-gateway-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "gateway", "range": false, "refId": "C"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "postgres", "range": false, "refId": "D"}
+          ],
+          "title": "Expected container presence",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Container start time is exposed by cAdvisor. A restart counter is intentionally omitted because cAdvisor does not export one.",
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "s"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 78},
+         "id": 32,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "time() - max by (name) (container_start_time_seconds{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"})", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "title": "Container uptime",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Ratio is shown only for finite cAdvisor memory limits below 1 PB; unlimited sentinel values remain No data.",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 78},
+         "id": 33,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum by (name) (container_memory_working_set_bytes{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}) / sum by (name) (container_spec_memory_limit_bytes{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"} < 1e15)", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "title": "Memory working set / limit",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "decimals": 2, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 9, "w": 12, "x": 0, "y": 86},
+         "id": 34,
+          "options": {"legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum by (name) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "title": "OpenPage container CPU",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 9, "w": 12, "x": 12, "y": 86},
+         "id": 35,
+          "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (container_memory_working_set_bytes{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"})", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "title": "OpenPage container RAM",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "Bps"}, "overrides": []},
+          "gridPos": {"h": 9, "w": 12, "x": 0, "y": 95},
+         "id": 36,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (rate(container_network_receive_bytes_total{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "{{name}} receive", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (rate(container_network_transmit_bytes_total{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "{{name}} transmit", "range": true, "refId": "B"}
+          ],
+          "title": "OpenPage container network",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "Bps"}, "overrides": []},
+          "gridPos": {"h": 9, "w": 12, "x": 12, "y": 95},
+         "id": 37,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (rate(container_fs_reads_bytes_total{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "{{name}} read", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (rate(container_fs_writes_bytes_total{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "{{name}} write", "range": true, "refId": "B"}
+          ],
+          "title": "OpenPage container filesystem I/O",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Current values for the selected OpenPage container(s). Process/thread columns are omitted because the cAdvisor process metric set is disabled in the current compose configuration.",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "#FF5CA8", "value": null}]}, "unit": "short"}, "overrides": [
+            {"matcher": {"id": "byName", "options": "CPU"}, "properties": [{"id": "unit", "value": "percent"}, {"id": "decimals", "value": 2}]},
+            {"matcher": {"id": "byName", "options": "RAM"}, "properties": [{"id": "unit", "value": "bytes"}]},
+            {"matcher": {"id": "byRegexp", "options": "/Network|Filesystem/"}, "properties": [{"id": "unit", "value": "Bps"}]}
+          ]},
+          "gridPos": {"h": 11, "w": 24, "x": 0, "y": 104},
+         "id": 38,
+          "options": {"cellHeight": "sm", "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false}, "showHeader": true},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum by (name) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\", name=~\"$container\", id!=\"/\"}[$__rate_interval]))", "format": "table", "instant": true, "legendFormat": "CPU", "range": false, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (container_memory_working_set_bytes{job=\"cadvisor\", name=~\"$container\", id!=\"/\"})", "format": "table", "instant": true, "legendFormat": "RAM", "range": false, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (rate(container_network_receive_bytes_total{job=\"cadvisor\", name=~\"$container\", id!=\"/\"}[$__rate_interval]))", "format": "table", "instant": true, "legendFormat": "Network receive", "range": false, "refId": "C"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (rate(container_network_transmit_bytes_total{job=\"cadvisor\", name=~\"$container\", id!=\"/\"}[$__rate_interval]))", "format": "table", "instant": true, "legendFormat": "Network transmit", "range": false, "refId": "D"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (rate(container_fs_reads_bytes_total{job=\"cadvisor\", name=~\"$container\", id!=\"/\"}[$__rate_interval]))", "format": "table", "instant": true, "legendFormat": "Filesystem read", "range": false, "refId": "E"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (rate(container_fs_writes_bytes_total{job=\"cadvisor\", name=~\"$container\", id!=\"/\"}[$__rate_interval]))", "format": "table", "instant": true, "legendFormat": "Filesystem write", "range": false, "refId": "F"}
+          ],
+          "title": "Current OpenPage container resources",
+          "transformations": [{"id": "labelsToFields", "options": {"mode": "columns"}}, {"id": "merge", "options": {}}, {"id": "organize", "options": {"excludeByName": {"Time": true}, "indexByName": {"name": 0, "Value #A": 1, "Value #B": 2, "Value #C": 3, "Value #D": 4, "Value #E": 5, "Value #F": 6}, "renameByName": {"Value #A": "CPU", "Value #B": "RAM", "Value #C": "Network receive", "Value #D": "Network transmit", "Value #E": "Filesystem read", "Value #F": "Filesystem write", "name": "Container"}}}],
+          "transparent": true,
+          "type": "table"
+        }
+      ],
+      "title": "OpenPage containers",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 115},
+     "id": 40,
+      "panels": [
+        {
+          "gridPos": {"h": 4, "w": 24, "x": 0, "y": 116},
+         "id": 41,
+          "options": {"code": {"language": "plaintext", "showLineNumbers": false, "showMiniMap": false}, "content": "PostgreSQL exporter is not installed. Query latency, active connections, locks, transactions and database size are not available yet.", "mode": "markdown"},
+          "title": "PostgreSQL visibility",
+          "transparent": true,
+          "type": "text"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [{"options": {"0": {"color": "red", "text": "Missing"}, "1": {"color": "green", "text": "Running"}}, "type": "value"}], "max": 1, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 5, "w": 6, "x": 0, "y": 120},
+         "id": 42,
+          "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "PostgreSQL", "range": false, "refId": "A"}],
+          "title": "PostgreSQL container",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#FF5CA8", "mode": "fixed"}, "unit": "s"}, "overrides": []},
+          "gridPos": {"h": 5, "w": 6, "x": 6, "y": 120},
+         "id": 43,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "time() - max(container_start_time_seconds{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"})", "instant": true, "legendFormat": "Uptime", "range": false, "refId": "A"}],
+          "title": "PostgreSQL uptime",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#B877DB", "mode": "fixed"}, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 5, "w": 6, "x": 12, "y": 120},
+         "id": 44,
+          "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "max(container_spec_memory_limit_bytes{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"} < 1e15)", "instant": true, "legendFormat": "Limit", "range": false, "refId": "A"}],
+          "title": "PostgreSQL memory limit",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "max": 100, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 5, "w": 6, "x": 18, "y": 120},
+         "id": 45,
+          "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum(container_memory_working_set_bytes{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}) / sum(container_spec_memory_limit_bytes{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"} < 1e15)", "instant": false, "legendFormat": "Used", "range": true, "refId": "A"}],
+          "title": "PostgreSQL memory / limit",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#FF5CA8", "mode": "fixed"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 125},
+         "id": 46,
+          "options": {"legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "single", "sort": "none"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum(rate(container_cpu_usage_seconds_total{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "CPU", "range": true, "refId": "A"}],
+          "title": "PostgreSQL container CPU",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#B877DB", "mode": "fixed"}, "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 125},
+         "id": 47,
+          "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "single", "sort": "none"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum(container_memory_working_set_bytes{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"})", "legendFormat": "Working set", "range": true, "refId": "A"}],
+          "title": "PostgreSQL container RAM",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "Bps"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 133},
+         "id": 48,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum(rate(container_network_receive_bytes_total{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "Receive", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum(rate(container_network_transmit_bytes_total{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "Transmit", "range": true, "refId": "B"}
+          ],
+          "title": "PostgreSQL container network",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Filesystem throughput is the available container-level storage view; PostgreSQL query and transaction metrics require a PostgreSQL exporter.",
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "Bps"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 133},
+         "id": 49,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum(rate(container_fs_reads_bytes_total{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "Read", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum(rate(container_fs_writes_bytes_total{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}[$__rate_interval]))", "legendFormat": "Write", "range": true, "refId": "B"}
+          ],
+          "title": "PostgreSQL container filesystem I/O",
+          "transparent": true,
+          "type": "timeseries"
+        }
+      ],
+      "title": "PostgreSQL",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 141},
+     "id": 50,
+      "panels": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "mappings": [{"options": {"0": {"color": "red", "text": "Down"}, "1": {"color": "green", "text": "Up"}}, "type": "value"}], "max": 1, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 142},
+         "id": 51,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "up", "legendFormat": "{{job}} — {{instance}}", "range": true, "refId": "A"}],
+          "title": "Prometheus target state",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "s"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 142},
+         "id": 52,
+          "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "scrape_duration_seconds", "legendFormat": "{{job}} — {{instance}}", "range": true, "refId": "A"}],
+          "title": "Scrape duration",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "decimals": 0, "unit": "short"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 8, "x": 0, "y": 150},
+         "id": 53,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "scrape_samples_scraped", "legendFormat": "{{job}} scraped", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "scrape_samples_post_metric_relabeling", "legendFormat": "{{job}} stored", "range": true, "refId": "B"}
+          ],
+          "title": "Scrape samples",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Number of configured targets currently down. This is derived directly from up and is not coerced when the metric itself is absent.",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 8, "w": 8, "x": 8, "y": 150},
+         "id": 54,
+          "options": {"colorMode": "background", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "count(up == 0)", "instant": false, "legendFormat": "Down", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "count(up)", "instant": false, "legendFormat": "Total", "range": true, "refId": "B"}
+          ],
+          "title": "Target failures / total",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Current local TSDB block storage reported by Prometheus. WAL and head memory are not included in this metric.",
+          "fieldConfig": {"defaults": {"color": {"fixedColor": "#FF5CA8", "mode": "fixed"}, "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 8, "x": 16, "y": 150},
+         "id": 55,
+          "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "list", "placement": "bottom", "showLegend": true}, "tooltip": {"mode": "single", "sort": "none"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "prometheus_tsdb_storage_blocks_bytes{job=\"prometheus\"}", "legendFormat": "TSDB blocks", "range": true, "refId": "A"}],
+          "title": "Prometheus stored data",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Monitoring containers are selected by image so the query does not depend on the compose project directory name.",
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "percent"}, "overrides": []},
+          "gridPos": {"h": 9, "w": 12, "x": 0, "y": 158},
+         "id": 56,
+          "options": {"legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum by (name) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\", name!=\"\", name!=\"/\", id!=\"/\", image=~\".*(prom/prometheus|grafana/grafana|google/cadvisor|prom/node-exporter).*\"}[$__rate_interval]))", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "title": "Monitoring container CPU",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 12, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "bytes"}, "overrides": []},
+          "gridPos": {"h": 9, "w": 12, "x": 12, "y": 158},
+         "id": 57,
+          "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (container_memory_working_set_bytes{job=\"cadvisor\", name!=\"\", name!=\"/\", id!=\"/\", image=~\".*(prom/prometheus|grafana/grafana|google/cadvisor|prom/node-exporter).*\"})", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "title": "Monitoring container RAM",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Age of the most recent successful up=1 sample within the selected dashboard range. A target with no success in range remains No data.",
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "s"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 167},
+         "id": 58,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "time() - max_over_time(timestamp(up == 1)[$__range:])", "legendFormat": "{{job}} — {{instance}}", "range": true, "refId": "A"}],
+          "title": "Time since last successful scrape",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [], "thresholds": {"mode": "absolute", "steps": [{"color": "#FF5CA8", "value": null}]}, "unit": "short"}, "overrides": [
+            {"matcher": {"id": "byName", "options": "Status"}, "properties": [{"id": "mappings", "value": [{"options": {"0": {"color": "red", "text": "Down"}, "1": {"color": "green", "text": "Up"}}, "type": "value"}]}]},
+            {"matcher": {"id": "byName", "options": "Scrape duration"}, "properties": [{"id": "unit", "value": "s"}]},
+            {"matcher": {"id": "byRegexp", "options": "/age/"}, "properties": [{"id": "unit", "value": "s"}]}
+          ]},
+          "gridPos": {"h": 12, "w": 24, "x": 0, "y": 175},
+         "id": 59,
+          "options": {"cellHeight": "sm", "footer": {"countRows": false, "fields": "", "reducer": ["sum"], "show": false}, "showHeader": true},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "up", "format": "table", "instant": true, "legendFormat": "Status", "range": false, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "scrape_duration_seconds", "format": "table", "instant": true, "legendFormat": "Scrape duration", "range": false, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "time() - timestamp(up)", "format": "table", "instant": true, "legendFormat": "Last scrape sample age", "range": false, "refId": "C"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "time() - max_over_time(timestamp(up == 1)[$__range:])", "format": "table", "instant": true, "legendFormat": "Last success age", "range": false, "refId": "D"}
+          ],
+          "title": "Prometheus targets",
+          "transformations": [{"id": "labelsToFields", "options": {"mode": "columns"}}, {"id": "merge", "options": {}}, {"id": "organize", "options": {"excludeByName": {"Time": true, "__name__": true}, "indexByName": {"job": 0, "instance": 1, "Value #A": 2, "Value #B": 3, "Value #C": 4, "Value #D": 5}, "renameByName": {"Value #A": "Status", "Value #B": "Scrape duration", "Value #C": "Last scrape sample age", "Value #D": "Last success age", "instance": "Instance", "job": "Job"}}}],
+          "transparent": true,
+          "type": "table"
+        }
+      ],
+      "title": "Monitoring health",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {"h": 1, "w": 24, "x": 0, "y": 187},
+     "id": 60,
+      "panels": [
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Presence of the four expected production containers. The query is gated by cAdvisor health, so exporter failure remains No data.",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "mappings": [{"options": {"0": {"color": "red", "text": "Missing"}, "1": {"color": "green", "text": "Running"}}, "type": "value"}], "max": 1, "min": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}}, "overrides": []},
+          "gridPos": {"h": 6, "w": 24, "x": 0, "y": 188},
+         "id": 61,
+          "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-backend-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "backend", "range": false, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-frontend-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "frontend", "range": false, "refId": "B"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-gateway-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "gateway", "range": false, "refId": "C"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "(count(container_last_seen{job=\"cadvisor\", name=\"openpage-n-postgres-1\", id!=\"/\"}) > bool 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": true, "legendFormat": "postgres", "range": false, "refId": "D"}
+          ],
+          "title": "Deployment container presence",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Raw cAdvisor last_seen timestamps. Gaps are preserved as No data.",
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 8, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "dateTimeAsIso"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 194},
+         "id": 62,
+          "options": {"legend": {"calcs": ["lastNotNull"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "1000 * max by (name) (container_last_seen{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"})", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "title": "Container last seen",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "fieldConfig": {"defaults": {"color": {"mode": "palette-classic"}, "custom": {"drawStyle": "line", "fillOpacity": 10, "lineWidth": 2, "showPoints": "never", "spanNulls": false}, "unit": "s"}, "overrides": []},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 194},
+         "id": 63,
+          "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "time() - max by (name) (container_last_seen{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"})", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "title": "Time since container observation",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {"type": "prometheus", "uid": "prometheus"},
+          "description": "Missing count is evaluated only while cAdvisor is up. Four expected names are defined by deploy/compose.yml.",
+          "fieldConfig": {"defaults": {"color": {"mode": "thresholds"}, "decimals": 0, "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}}, "overrides": [{"matcher": {"id": "byName", "options": "Running"}, "properties": [{"id": "color", "value": {"fixedColor": "#FF5CA8", "mode": "fixed"}}]}]},
+          "gridPos": {"h": 6, "w": 24, "x": 0, "y": 202},
+         "id": 64,
+          "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "center", "orientation": "horizontal", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "value_and_name", "wideLayout": true},
+          "targets": [
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "count(count(container_last_seen{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}) by (name)) and on() (up{job=\"cadvisor\"} == 1)", "instant": false, "legendFormat": "Running", "range": true, "refId": "A"},
+            {"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "clamp_min(4 - count(count(container_last_seen{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", id!=\"/\"}) by (name)), 0) and on() (up{job=\"cadvisor\"} == 1)", "instant": false, "legendFormat": "Missing", "range": true, "refId": "B"}
+          ],
+          "title": "Expected OpenPage containers",
+          "transparent": true,
+          "type": "stat"
+        },
+        {
+          "gridPos": {"h": 4, "w": 24, "x": 0, "y": 208},
+         "id": 65,
+          "options": {"code": {"language": "plaintext", "showLineNumbers": false, "showMiniMap": false}, "content": "Metrics for Git revision, reconcile status, deployment timestamp and backup freshness are not exported yet.", "mode": "markdown"},
+          "title": "Deployment metadata limitations",
+          "transparent": true,
+          "type": "text"
+        }
+      ],
+      "title": "Deployment health",
+      "type": "row"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 41,
+  "tags": ["openpage", "production", "overview"],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "definition": "label_values(node_uname_info{job=\"node-exporter\"}, instance)",
+        "hide": 0,
+        "includeAll": false,
+        "label": "Node instance",
+        "multi": false,
+        "name": "node_instance",
+        "options": [],
+        "query": {"query": "label_values(node_uname_info{job=\"node-exporter\"}, instance)", "refId": "PrometheusVariableQueryEditor-VariableQuery"},
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "allValue": "openpage-n-(backend|frontend|gateway|postgres)-1",
+        "current": {"selected": true, "text": "All", "value": "$__all"},
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "definition": "label_values(container_last_seen{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", name!=\"\", name!=\"/\", id!=\"/\"}, name)",
+        "hide": 0,
+        "includeAll": true,
+        "label": "OpenPage container",
+        "multi": true,
+        "name": "container",
+        "options": [],
+        "query": {"query": "label_values(container_last_seen{job=\"cadvisor\", name=~\"openpage-n-(backend|frontend|gateway|postgres)-1\", name!=\"\", name!=\"/\", id!=\"/\"}, name)", "refId": "PrometheusVariableQueryEditor-VariableQuery"},
+        "refresh": 1,
+        "regex": "",
+        "skipUrlSync": false,
+        "sort": 1,
+        "type": "query"
+      }
+    ]
+  },
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "OpenPage Production Overview",
+  "uid": "openpage-overview",
+  "version": 1,
+  "weekStart": ""
+}
