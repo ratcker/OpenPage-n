@@ -28,4 +28,30 @@ if [[ "$health" != *'"status":"ok"'* &&
     echo "Unexpected health response: $health" >&2
     exit 1
 fi
+
+echo "Checking that public API documentation is hidden"
+private_paths=(
+    /api/docs/
+    /api/schema/
+    /api/redoc/
+)
+
+for path in "${private_paths[@]}"; do
+    status="$(
+        curl \
+            --silent \
+            --show-error \
+            --output /dev/null \
+            --write-out '%{http_code}' \
+            --max-time 15 \
+            --resolve "${domain}:443:${target_ip}" \
+            "${base_url}${path}"
+    )"
+
+    if [[ "$status" != "404" ]]; then
+        echo "Expected 404 for ${path}, got ${status}" >&2
+        exit 1
+    fi
+done
+
 echo "Smoke tests passed"

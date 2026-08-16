@@ -32,6 +32,14 @@ compose=(
     -f "$deploy_dir/compose.yml"
 )
 
+reload_caddy() {
+    echo "reloading Caddy configuration"
+    "${compose[@]}" exec -T gateway \
+        caddy reload \
+        --config /etc/caddy/Caddyfile \
+        --adapter caddyfile
+}
+
 # Возможность переиспользовать Compose для мониторинга
 monitoring_compose=(
     docker compose
@@ -109,6 +117,7 @@ if [[ "$backend_changed" == false &&
       "$static_missing" == false &&
       "$config_changed" == false &&
       "$caddy_changed" == false ]]; then
+    reload_caddy
     echo "Production is already up to date."
     exit 0
 fi
@@ -126,11 +135,17 @@ if [[ "$backend_changed" == true || "$static_missing" == true ]]; then
         python manage.py collectstatic --noinput
 fi
 
-"${compose[@]}" exec -T gateway \
-    caddy reload --config /etc/caddy/Caddyfile
+if [[ "$caddy_changed" == true ]]; then
+    echo "validating Caddy configuration"
+    "${compose[@]}" run --rm --no-deps gateway \
+        caddy validate \
+        --config /etc/caddy/Caddyfile \
+        --adapter caddyfile
+fi
 
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
+reload_caddy
 "$deploy_dir/scripts/smoke-test.sh"
 
 #деплой мониторинга
