@@ -126,6 +126,9 @@ if [[ "$backend_changed" == true || "$static_missing" == true ]]; then
         python manage.py collectstatic --noinput
 fi
 
+"${compose[@]}" exec -T gateway \
+    caddy reload --config /etc/caddy/Caddyfile
+
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
 "$deploy_dir/scripts/smoke-test.sh"
