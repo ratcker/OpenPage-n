@@ -32,6 +32,14 @@ compose=(
     -f "$deploy_dir/compose.yml"
 )
 
+# Возможность переиспользовать Compose для мониторинга
+monitoring_compose=(
+    docker compose
+    --project-name monitoring
+    --env-file "$deploy_dir/.env.prod"
+    -f "$deploy_dir/monitoring/compose.yml"
+)
+
 # Запоминаем image ID запущенных контейнеров до обновления.
 backend_container="$("${compose[@]}" ps -q backend)"
 frontend_container="$("${compose[@]}" ps -q frontend)"
@@ -60,6 +68,7 @@ backend_changed=false
 frontend_changed=false
 config_changed=false
 caddy_changed=false
+monitoring_chenged=false
 
 # Сравниваем запущенные и загруженные версии образов.
 if [[ "$backend_before" != "$backend_after" ]];then
@@ -76,10 +85,18 @@ fi
 if ! git diff --quiet "$old_revision" "$new_revision" -- deploy/Caddyfile; then
     caddy_changed=true
 fi
+if ! git diff --quiet "$old_revision" "$new_revision" -- deploy/monitoring; then
+    monitoring_changed=true
+fi
+#так как мониторинг поднимается отдельным compose, будет справедливо проверять его наличие отдельно
+if [[ -z "$("${monitoring_compose[@]}" ps -q)" ]]; then
+    monitoring_changed=true
+fi
 
 # Завершаемся раньше, если обновлять нечего.
 if [[ "$backend_changed" == false &&
       "$frontend_changed" == false &&
+      "$monitoring_changed" == false &&
       "$config_changed" == false &&
       "$caddy_changed" == false ]]; then
     echo "Production is already up to date."
@@ -97,5 +114,14 @@ fi
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
 "$deploy_dir/scripts/smoke-test.sh"
 
+#деплой мониторинга
+if [[ "$monitoring_changed" == true ]]; then
+    echo "reconciling monitorng stack"
+    "${monitoring_compose[@]}" pull
+    "${monitoring_compose[@]}" up -d --remove-orphans \
+        --wait --wait-timeout 120
+fi
+
 echo "Production reconciliation completed."
 "${compose[@]}" ps
+"${monitoring_compose[@]}" ps
