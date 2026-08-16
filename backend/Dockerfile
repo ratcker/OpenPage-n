@@ -15,6 +15,7 @@ CMD ["sh", "-c", "python manage.py migrate && python manage.py runserver 0.0.0.0
 
 #stage image - prod-version
 FROM base AS production
+RUN mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles #переназначаем владельца для работы с static-django
 USER app
 EXPOSE 8000
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]

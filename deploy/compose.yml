@@ -30,6 +30,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    volumes:
+      - django_static:/app/staticfiles
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/')"]
       interval: 10s
@@ -54,10 +56,12 @@ services:
       - "443:443"
       - "80:80"
       - "443:443/udp"
+      - "8081:8081"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      - django_static:/srv/django-static:ro
     depends_on:
       backend:
         condition: service_healthy
@@ -69,3 +73,4 @@ volumes:
   postgres_data:    
   caddy_data:
   caddy_config:
+  django_static:

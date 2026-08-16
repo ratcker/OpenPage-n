@@ -1,9 +1,41 @@
 xn--e1aamodgc0e.xn--p1ai {
+    @private_docs {
+        path /api/docs* /api/schema* /api/redoc*
+    }
+    respond @private_docs 404
+
     handle /api/* {
         reverse_proxy backend:8000
     }
 
     handle {
         reverse_proxy frontend:8080
+    }
+}
+
+:8081 {
+    handle_path /static/* {
+        root * /srv/django-static
+        file_server
+    }
+
+    handle /admin* {
+        reverse_proxy backend:8000
+    }
+
+    handle /api/docs* {
+        reverse_proxy backend:8000
+    }
+
+    handle /api/schema* {
+        reverse_proxy backend:8000
+    }
+
+    handle /api/redoc* {
+        reverse_proxy backend:8000
+    }
+
+    handle {
+        respond "Not found" 404
     }
 }

@@ -43,6 +43,7 @@ monitoring_compose=(
 # Запоминаем image ID запущенных контейнеров до обновления.
 backend_container="$("${compose[@]}" ps -q backend)"
 frontend_container="$("${compose[@]}" ps -q frontend)"
+gateway_container="$("${compose[@]}" ps -q gateway)"
 
 backend_before=""
 frontend_before=""
@@ -68,7 +69,15 @@ backend_changed=false
 frontend_changed=false
 config_changed=false
 caddy_changed=false
-monitoring_chenged=false
+monitoring_changed=false
+
+static_missing=true
+
+if [[ -n "$gateway_container" ]] &&
+   docker exec "$gateway_container" \
+       test -f /srv/django-static/admin/css/base.css; then
+    static_missing=false
+fi
 
 # Сравниваем запущенные и загруженные версии образов.
 if [[ "$backend_before" != "$backend_after" ]];then
@@ -97,6 +106,7 @@ fi
 if [[ "$backend_changed" == false &&
       "$frontend_changed" == false &&
       "$monitoring_changed" == false &&
+      "$static_missing" == false &&
       "$config_changed" == false &&
       "$caddy_changed" == false ]]; then
     echo "Production is already up to date."
@@ -106,8 +116,14 @@ fi
 # Поднимаем БД и применяем миграции новым backend image.
 "${compose[@]}" up -d --wait --wait-timeout 120 postgres
 if [[ "$backend_changed" == true ]]; then
+    echo "applying backend migrations"
     "${compose[@]}" run --rm --no-deps backend \
         python manage.py migrate --noinput
+fi
+if [[ "$backend_changed" == true || "$static_missing" == true ]]; then
+    echo "collecting django static files"
+    "${compose[@]}" run --rm --no-deps backend \
+        python manage.py collectstatic --noinput
 fi
 
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
