@@ -77,6 +77,7 @@ backend_changed=false
 frontend_changed=false
 config_changed=false
 caddy_changed=false
+caddy_mount_stale=false
 monitoring_changed=false
 
 static_missing=true
@@ -85,6 +86,23 @@ if [[ -n "$gateway_container" ]] &&
    docker exec "$gateway_container" \
        test -f /srv/django-static/admin/css/base.css; then
     static_missing=false
+fi
+
+# Git может атомарно заменить bind-mounted Caddyfile новым inode. В этом
+# случае запущенный контейнер продолжает видеть старую версию файла.
+if [[ -n "$gateway_container" ]]; then
+    host_caddy_checksum="$(
+        sha256sum "$deploy_dir/Caddyfile" | awk '{print $1}'
+    )"
+    container_caddy_checksum="$(
+        docker exec "$gateway_container" \
+            sha256sum /etc/caddy/Caddyfile 2>/dev/null |
+            awk '{print $1}' || true
+    )"
+
+    if [[ "$host_caddy_checksum" != "$container_caddy_checksum" ]]; then
+        caddy_mount_stale=true
+    fi
 fi
 
 # Сравниваем запущенные и загруженные версии образов.
@@ -116,7 +134,8 @@ if [[ "$backend_changed" == false &&
       "$monitoring_changed" == false &&
       "$static_missing" == false &&
       "$config_changed" == false &&
-      "$caddy_changed" == false ]]; then
+      "$caddy_changed" == false &&
+      "$caddy_mount_stale" == false ]]; then
     reload_caddy
     echo "Production is already up to date."
     exit 0
@@ -135,7 +154,7 @@ if [[ "$backend_changed" == true || "$static_missing" == true ]]; then
         python manage.py collectstatic --noinput
 fi
 
-if [[ "$caddy_changed" == true ]]; then
+if [[ "$caddy_changed" == true || "$caddy_mount_stale" == true ]]; then
     echo "validating Caddy configuration"
     "${compose[@]}" run --rm --no-deps gateway \
         caddy validate \
@@ -145,6 +164,13 @@ fi
 
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
 "${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
+
+if [[ "$caddy_changed" == true || "$caddy_mount_stale" == true ]]; then
+    echo "recreating gateway to refresh the Caddyfile bind mount"
+    "${compose[@]}" up -d --force-recreate --no-deps \
+        --wait --wait-timeout 120 gateway
+fi
+
 reload_caddy
 "$deploy_dir/scripts/smoke-test.sh"
 
