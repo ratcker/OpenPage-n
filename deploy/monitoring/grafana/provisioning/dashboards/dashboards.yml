@@ -1,0 +1,11 @@
+apiVersion: 1
+
+providers:
+  - name: openpage
+    folder: openpage
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 30
+    allowUiUpdates: false
+    options:
+      path: /var/lib/grafana/dashboards
