@@ -1,0 +1,103 @@
+groups:
+  - name: host
+    rules:
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target недоступен"
+          description: "Job {{ $labels.job }}, instance {{ $labels.instance }} недоступен более 2 минут."
+
+      - alert: HostHighCPU
+        expr: |
+          1 - avg by (instance) (
+            rate(node_cpu_seconds_total{job="node-exporter", mode="idle"}[5m])
+          ) > 0.85
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая нагрузка CPU"
+          description: "Загрузка CPU на {{ $labels.instance }} выше 85% более 10 минут."
+
+      - alert: HostLowMemory
+        expr: |
+          node_memory_MemAvailable_bytes{job="node-exporter"}
+          /
+          node_memory_MemTotal_bytes{job="node-exporter"}
+          < 0.10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Заканчивается оперативная память"
+          description: "На {{ $labels.instance }} доступно менее 10% RAM."
+
+      - alert: HostDiskAlmostFull
+        expr: |
+          node_filesystem_avail_bytes{
+            job="node-exporter",
+            mountpoint="/",
+            fstype!~"rootfs|tmpfs|overlay"
+          }
+          /
+          node_filesystem_size_bytes{
+            job="node-exporter",
+            mountpoint="/",
+            fstype!~"rootfs|tmpfs|overlay"
+          }
+          < 0.15
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Заканчивается место на системном диске"
+          description: "На {{ $labels.instance }} в корневой файловой системе свободно менее 15%."
+
+  - name: containers
+    rules:
+      - alert: OpenPageContainerMissing
+        expr: |
+          (
+            count(
+              container_last_seen{
+                job="cadvisor",
+                name=~"openpage-n-(backend|frontend|gateway|postgres)-1",
+                id!="/"
+              }
+            ) < 4
+          )
+          and on() (up{job="cadvisor"} == 1)
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Пропал контейнер OpenPage"
+          description: "cAdvisor видит меньше четырёх production-контейнеров OpenPage."
+
+  - name: alerting
+    rules:
+      - alert: AlertmanagerConfigReloadFailed
+        expr: alertmanager_config_last_reload_successful{job="alertmanager"} == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Alertmanager не загрузил конфигурацию"
+          description: "Последняя перезагрузка конфигурации Alertmanager завершилась ошибкой."
+
+      - alert: AlertmanagerEmailDeliveryFailed
+        expr: |
+          increase(
+            alertmanager_notifications_failed_total{
+              job="alertmanager",
+              integration="email"
+            }[15m]
+          ) > 0
+        labels:
+          severity: warning
+        annotations:
+          summary: "Alertmanager не доставляет email"
+          description: "За последние 15 минут Alertmanager не смог отправить email-уведомление."

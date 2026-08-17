@@ -709,7 +709,7 @@
           "gridPos": {"h": 9, "w": 12, "x": 0, "y": 158},
          "id": 56,
           "options": {"legend": {"calcs": ["lastNotNull", "mean"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
-          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum by (name) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\", name!=\"\", name!=\"/\", id!=\"/\", image=~\".*(prom/prometheus|grafana/grafana|google/cadvisor|prom/node-exporter).*\"}[$__rate_interval]))", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "100 * sum by (name) (rate(container_cpu_usage_seconds_total{job=\"cadvisor\", name!=\"\", name!=\"/\", id!=\"/\", image=~\".*(prom/prometheus|prometheus/alertmanager|grafana/grafana|google/cadvisor|prom/node-exporter).*\"}[$__rate_interval]))", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
           "title": "Monitoring container CPU",
           "transparent": true,
           "type": "timeseries"
@@ -720,7 +720,7 @@
           "gridPos": {"h": 9, "w": 12, "x": 12, "y": 158},
          "id": 57,
           "options": {"legend": {"calcs": ["lastNotNull", "max"], "displayMode": "table", "placement": "right", "showLegend": true}, "tooltip": {"mode": "multi", "sort": "desc"}},
-          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (container_memory_working_set_bytes{job=\"cadvisor\", name!=\"\", name!=\"/\", id!=\"/\", image=~\".*(prom/prometheus|grafana/grafana|google/cadvisor|prom/node-exporter).*\"})", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
+          "targets": [{"datasource": {"type": "prometheus", "uid": "prometheus"}, "editorMode": "code", "expr": "sum by (name) (container_memory_working_set_bytes{job=\"cadvisor\", name!=\"\", name!=\"/\", id!=\"/\", image=~\".*(prom/prometheus|prometheus/alertmanager|grafana/grafana|google/cadvisor|prom/node-exporter).*\"})", "legendFormat": "{{name}}", "range": true, "refId": "A"}],
           "title": "Monitoring container RAM",
           "transparent": true,
           "type": "timeseries"

@@ -6,9 +6,16 @@ services:
       - --storage.tsdb.path=/prometheus
       - --storage.tsdb.retention.time=7d
       - --storage.tsdb.retention.size=2GB
+      - --web.enable-lifecycle
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus:/etc/prometheus:ro
       - prometheus_data:/prometheus
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:9090/-/ready"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
     restart: unless-stopped
     mem_limit: 512m
   
@@ -51,7 +58,31 @@ services:
       - /dev/disk:/dev/disk:ro
     restart: unless-stopped
     mem_limit: 256m
+
+  alertmanager:
+    image: quay.io/prometheus/alertmanager:v0.33.1
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+    volumes:
+      - ./alertmanager:/etc/alertmanager:ro
+      - alertmanager_data:/alertmanager
+    secrets:
+      - smtp_password
+    healthcheck:
+      test: ["CMD", "/bin/amtool", "--alertmanager.url=http://localhost:9093", "alert", "query"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+    mem_limit: 128m
   
 volumes:
   prometheus_data:
   grafana_data:
+  alertmanager_data:
+
+secrets:
+  smtp_password:
+    environment: DJANGO_EMAIL_HOST_PASSWORD

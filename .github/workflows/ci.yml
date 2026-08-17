@@ -9,7 +9,6 @@ permissions:
   packages: write
 jobs:
 
-
   changes:
     runs-on: ubuntu-latest
     outputs:
@@ -77,6 +76,30 @@ jobs:
       - name: Build frontend
         run: npm run build
   
+  infrastructure-config:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate Compose files
+        run: |
+          docker compose --env-file deploy/.env.prod.example -f deploy/compose.yml config --quiet
+          docker compose --env-file deploy/.env.prod.example -f deploy/monitoring/compose.yml config --quiet
+
+      - name: Validate Prometheus configuration
+        run: >-
+          docker run --rm --entrypoint /bin/promtool
+          -v "$PWD/deploy/monitoring/prometheus:/etc/prometheus:ro"
+          prom/prometheus:v3.12.0
+          check config /etc/prometheus/prometheus.yml
+
+      - name: Validate Alertmanager configuration
+        run: >-
+          docker run --rm --entrypoint /bin/amtool
+          -v "$PWD/deploy/monitoring/alertmanager:/etc/alertmanager:ro"
+          quay.io/prometheus/alertmanager:v0.33.1
+          check-config /etc/alertmanager/alertmanager.yml
 
   backend-image:
     runs-on: ubuntu-latest

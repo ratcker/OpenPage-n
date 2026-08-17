@@ -40,7 +40,7 @@ reload_caddy() {
         --adapter caddyfile
 }
 
-# Возможность переиспользовать Compose для мониторинга
+# Отдельный Compose-проект для мониторинга.
 monitoring_compose=(
     docker compose
     --project-name monitoring
@@ -123,10 +123,17 @@ fi
 if ! git diff --quiet "$old_revision" "$new_revision" -- deploy/monitoring; then
     monitoring_changed=true
 fi
-#так как мониторинг поднимается отдельным compose, будет справедливо проверять его наличие отдельно
-if [[ -z "$("${monitoring_compose[@]}" ps -q)" ]]; then
-    monitoring_changed=true
+
+# Поднимаем остановленные сервисы и перечитываем bind-mounted конфигурацию.
+if [[ "$monitoring_changed" == true ]]; then
+    "${monitoring_compose[@]}" pull
 fi
+"${monitoring_compose[@]}" up -d --remove-orphans \
+    --wait --wait-timeout 120
+"${monitoring_compose[@]}" exec -T prometheus \
+    wget -q -O /dev/null --post-data='' http://localhost:9090/-/reload
+"${monitoring_compose[@]}" exec -T prometheus \
+    wget -q -O /dev/null --post-data='' http://alertmanager:9093/-/reload
 
 # Завершаемся раньше, если обновлять нечего.
 if [[ "$backend_changed" == false &&
@@ -173,14 +180,6 @@ fi
 
 reload_caddy
 "$deploy_dir/scripts/smoke-test.sh"
-
-#деплой мониторинга
-if [[ "$monitoring_changed" == true ]]; then
-    echo "reconciling monitorng stack"
-    "${monitoring_compose[@]}" pull
-    "${monitoring_compose[@]}" up -d --remove-orphans \
-        --wait --wait-timeout 120
-fi
 
 echo "Production reconciliation completed."
 "${compose[@]}" ps
