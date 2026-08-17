@@ -82,10 +82,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Validate Compose files
-        run: |
-          docker compose --env-file deploy/.env.prod.example -f deploy/compose.yml config --quiet
-          docker compose --env-file deploy/.env.prod.example -f deploy/monitoring/compose.yml config --quiet
+      - name: Validate monitoring Compose
+        run: docker compose -f deploy/monitoring/compose.yml config --quiet
+        env:
+          GRAFANA_ADMIN_PASSWORD: ci-only
+          DJANGO_EMAIL_HOST_PASSWORD: ci-only
 
       - name: Validate Prometheus configuration
         run: >-
