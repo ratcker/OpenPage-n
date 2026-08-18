@@ -86,6 +86,7 @@ services:
       - ./loki/loki.yml:/etc/loki/loki.yml
       - loki_data:/loki
     restart: unless-stopped
+    mem_limit: 512m
 
   alloy:
     image: grafana/alloy:v1.18.0
@@ -102,6 +103,7 @@ services:
       loki:
         condition: service_started
     restart: unless-stopped
+    mem_limit: 256m
   
 volumes:
   prometheus_data:
