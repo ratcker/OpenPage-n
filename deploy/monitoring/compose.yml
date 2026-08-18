@@ -77,11 +77,38 @@ services:
       start_period: 10s
     restart: unless-stopped
     mem_limit: 128m
+
+  loki:
+    image: grafana/loki:3.7.2
+    command:
+      - -config.file=/etc/loki/loki.yml
+    volumes:
+      - ./loki/loki.yml:/etc/loki/loki.yml
+      - loki_data:/loki
+    restart: unless-stopped
+
+  alloy:
+    image: grafana/alloy:v1.18.0
+    command:
+      - run
+      - --server.http.listen-addr=0.0.0.0:12345
+      - --storage.path=/var/lib/alloy/data
+      - etc/alloy/config.alloy
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - alloy_data:/var/lib/alloy/data
+    depends_on:
+      loki:
+        condition: service_started
+    restart: unless-stopped
   
 volumes:
   prometheus_data:
   grafana_data:
   alertmanager_data:
+  loki_data:
+  alloy_data:
 
 secrets:
   smtp_password:
