@@ -79,6 +79,7 @@ config_changed=false
 caddy_changed=false
 caddy_mount_stale=false
 monitoring_changed=false
+grafana_changed=false
 
 static_missing=true
 
@@ -123,6 +124,9 @@ fi
 if ! git diff --quiet "$old_revision" "$new_revision" -- deploy/monitoring; then
     monitoring_changed=true
 fi
+if ! git diff --quiet "$old_revision" "$new_revision" -- deploy/monitoring/grafana; then
+    grafana_changed=true
+fi
 
 # Поднимаем остановленные сервисы и перечитываем bind-mounted конфигурацию.
 if [[ "$monitoring_changed" == true ]]; then
@@ -130,6 +134,11 @@ if [[ "$monitoring_changed" == true ]]; then
 fi
 "${monitoring_compose[@]}" up -d --remove-orphans \
     --wait --wait-timeout 120
+if [[ "$grafana_changed" == true ]]; then
+    echo "recreating Grafana to apply provisioning changes"
+    "${monitoring_compose[@]}" up -d --force-recreate --no-deps \
+        --wait --wait-timeout 120 grafana
+fi
 "${monitoring_compose[@]}" exec -T prometheus \
     wget -q -O /dev/null --post-data='' http://localhost:9090/-/reload
 "${monitoring_compose[@]}" exec -T prometheus \
