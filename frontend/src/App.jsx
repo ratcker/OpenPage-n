@@ -8,6 +8,7 @@ import {
 import ProtectedRoute, { SessionLoading } from './auth/ProtectedRoute.jsx';
 import useAuth from './auth/useAuth.js';
 import HubPage from './pages/hub/HubPage.jsx';
+import KnowledgePage from './pages/knowledge/KnowledgePage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage/LoginPage.jsx';
 import ProfilePage from './pages/ProfilePage/ProfilePage.jsx';
@@ -30,6 +31,7 @@ export default function App() {
       <Route path="/" element={<LandingPage />} />
       <Route path="/login" element={<LoginRoute />} />
       <Route path="/hub" element={<HubPage />} />
+      <Route path="/knowledge" element={<KnowledgePage />} />
       <Route
         path="/profile"
         element={(
