@@ -1,0 +1,430 @@
+import uuid
+from decimal import Decimal
+from pathlib import Path
+from tempfile import TemporaryDirectory
+
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
+from django.urls import reverse
+from rest_framework import status
+from rest_framework.test import APITestCase
+from rest_framework_simplejwt.tokens import RefreshToken
+
+from accounts.models import User
+
+from .models import Book, KnowledgeProfile, UserLibraryBook
+from .storage import LocalKnowledgeStorage, book_storage_key
+
+
+class KnowledgeAPITestCase(APITestCase):
+    def setUp(self):
+        self.media_directory = TemporaryDirectory()
+        self.addCleanup(self.media_directory.cleanup)
+        self.media_override = override_settings(
+            MEDIA_ROOT=Path(self.media_directory.name)
+        )
+        self.media_override.enable()
+        self.addCleanup(self.media_override.disable)
+
+        self.user = User.objects.create_user(
+            email="reader@example.com",
+            name="Читатель",
+            password="test-password",
+        )
+        self.other_user = User.objects.create_user(
+            email="other@example.com",
+            name="Другой читатель",
+            password="test-password",
+        )
+
+    def authenticate(self, user=None):
+        user = user or self.user
+        access = RefreshToken.for_user(user).access_token
+        self.client.credentials(HTTP_AUTHORIZATION=f"Bearer {access}")
+
+    def create_model_book(
+        self,
+        *,
+        uploaded_by=None,
+        visibility=Book.Visibility.PUBLIC,
+        format=Book.Format.EPUB,
+        title=None,
+    ):
+        book_id = uuid.uuid4()
+        return Book.objects.create(
+            id=book_id,
+            title=title or f"Книга {book_id}",
+            author="Автор",
+            description="Описание",
+            format=format,
+            uploaded_by=uploaded_by or self.other_user,
+            visibility=visibility,
+            status=Book.Status.READY,
+            storage_key=book_storage_key(book_id, format),
+        )
+
+
+class BookUploadAPITests(KnowledgeAPITestCase):
+    def setUp(self):
+        super().setUp()
+        KnowledgeProfile.objects.create(
+            user=self.user,
+            display_name="Автор материалов",
+        )
+        self.authenticate()
+        self.url = reverse("knowledge_books")
+
+    def upload_data(self, *, format=Book.Format.EPUB, visibility=None):
+        extension = "pdf" if format == Book.Format.PDF else "epub"
+        return {
+            "file": SimpleUploadedFile(
+                f"user-file.{extension}",
+                f"{format} content".encode(),
+                content_type="application/octet-stream",
+            ),
+            "title": "Загруженная книга",
+            "author": "Автор книги",
+            "description": "Описание книги",
+            "format": format,
+            "visibility": visibility or Book.Visibility.PRIVATE,
+        }
+
+    def test_author_can_upload_epub(self):
+        response = self.client.post(
+            self.url,
+            self.upload_data(),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        book = Book.objects.get()
+        self.assertEqual(book.status, Book.Status.READY)
+        self.assertEqual(response.data["id"], str(book.id))
+        self.assertNotIn("storage_key", response.data)
+        self.assertNotIn("uploaded_by", response.data)
+        self.assertTrue(
+            UserLibraryBook.objects.filter(user=self.user, book=book).exists()
+        )
+
+        storage = LocalKnowledgeStorage()
+        self.assertTrue(storage.exists(book.storage_key))
+        with storage.open(book.storage_key) as stored_file:
+            self.assertEqual(stored_file.read(), b"epub content")
+
+    def test_author_can_upload_pdf(self):
+        response = self.client.post(
+            self.url,
+            self.upload_data(
+                format=Book.Format.PDF,
+                visibility=Book.Visibility.PUBLIC,
+            ),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        book = Book.objects.get()
+        self.assertEqual(book.format, Book.Format.PDF)
+        self.assertEqual(book.visibility, Book.Visibility.PUBLIC)
+        self.assertEqual(book.storage_key, f"books/{book.id}/original.pdf")
+        with LocalKnowledgeStorage().open(book.storage_key) as stored_file:
+            self.assertEqual(stored_file.read(), b"pdf content")
+
+    def test_user_without_knowledge_profile_gets_forbidden(self):
+        self.authenticate(self.other_user)
+
+        response = self.client.post(
+            self.url,
+            self.upload_data(),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Book.objects.exists())
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_unauthenticated_upload_is_rejected(self):
+        self.client.credentials()
+
+        response = self.client.post(
+            self.url,
+            self.upload_data(),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(Book.objects.exists())
+
+    def test_invalid_format_and_visibility_are_rejected(self):
+        invalid_values = (
+            {"format": "txt"},
+            {"visibility": "shared"},
+        )
+
+        for changes in invalid_values:
+            with self.subTest(changes=changes):
+                data = self.upload_data()
+                data.update(changes)
+                response = self.client.post(self.url, data, format="multipart")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertFalse(Book.objects.exists())
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+
+class BookCatalogAPITests(KnowledgeAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.authenticate()
+        self.url = reverse("knowledge_books")
+
+    def test_catalog_contains_only_public_books_including_own(self):
+        public_book = self.create_model_book()
+        own_public_book = self.create_model_book(uploaded_by=self.user)
+        private_book = self.create_model_book(
+            visibility=Book.Visibility.PRIVATE,
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result_ids = {item["id"] for item in response.data["results"]}
+        self.assertEqual(
+            result_ids,
+            {str(public_book.id), str(own_public_book.id)},
+        )
+        self.assertNotIn(str(private_book.id), result_ids)
+
+    def test_catalog_is_paginated_and_has_stable_newest_first_order(self):
+        for number in range(21):
+            self.create_model_book(title=f"Книга {number:02d}")
+        expected_ids = [
+            str(book_id)
+            for book_id in Book.objects.filter(visibility=Book.Visibility.PUBLIC)
+            .order_by("-created_at", "-id")
+            .values_list("id", flat=True)
+        ]
+
+        first_page = self.client.get(self.url)
+        second_page = self.client.get(self.url, {"page": 2})
+
+        self.assertEqual(first_page.data["count"], 21)
+        self.assertIsNotNone(first_page.data["next"])
+        self.assertIsNone(first_page.data["previous"])
+        self.assertEqual(
+            [item["id"] for item in first_page.data["results"]],
+            expected_ids[:20],
+        )
+        self.assertEqual(
+            [item["id"] for item in second_page.data["results"]],
+            expected_ids[20:],
+        )
+
+
+class BookDetailAPITests(KnowledgeAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.authenticate()
+
+    def get_book(self, book):
+        return self.client.get(
+            reverse("knowledge_book_detail", kwargs={"book_uuid": book.id})
+        )
+
+    def test_public_book_is_available_to_another_user(self):
+        book = self.create_model_book(uploaded_by=self.other_user)
+
+        response = self.get_book(book)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], str(book.id))
+        self.assertNotIn("storage_key", response.data)
+        self.assertNotIn("uploaded_by", response.data)
+
+    def test_owner_can_read_private_book(self):
+        book = self.create_model_book(
+            uploaded_by=self.user,
+            visibility=Book.Visibility.PRIVATE,
+        )
+
+        response = self.get_book(book)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_foreign_private_book_returns_forbidden(self):
+        book = self.create_model_book(
+            uploaded_by=self.other_user,
+            visibility=Book.Visibility.PRIVATE,
+        )
+
+        response = self.get_book(book)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_unknown_book_returns_not_found(self):
+        response = self.client.get(
+            reverse(
+                "knowledge_book_detail",
+                kwargs={"book_uuid": uuid.uuid4()},
+            )
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+
+class KnowledgeAPIAuthenticationTests(KnowledgeAPITestCase):
+    def test_all_read_and_library_endpoints_require_authentication(self):
+        book = self.create_model_book()
+        endpoints = (
+            ("get", reverse("knowledge_books")),
+            (
+                "get",
+                reverse(
+                    "knowledge_book_detail",
+                    kwargs={"book_uuid": book.id},
+                ),
+            ),
+            ("get", reverse("knowledge_library")),
+            (
+                "post",
+                reverse(
+                    "knowledge_library_add",
+                    kwargs={"book_uuid": book.id},
+                ),
+            ),
+            ("get", reverse("knowledge_profile")),
+        )
+
+        for method, url in endpoints:
+            with self.subTest(method=method, url=url):
+                response = getattr(self.client, method)(url)
+
+                self.assertEqual(
+                    response.status_code,
+                    status.HTTP_401_UNAUTHORIZED,
+                )
+
+
+class LibraryAPITests(KnowledgeAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.authenticate()
+        self.list_url = reverse("knowledge_library")
+
+    def test_user_sees_only_allowed_books_from_own_library(self):
+        public_book = self.create_model_book()
+        own_private_book = self.create_model_book(
+            uploaded_by=self.user,
+            visibility=Book.Visibility.PRIVATE,
+        )
+        foreign_private_book = self.create_model_book(
+            visibility=Book.Visibility.PRIVATE,
+        )
+        public_entry = UserLibraryBook.objects.create(
+            user=self.user,
+            book=public_book,
+            reading_location={"chapter": "chapter-3"},
+            reading_percentage=Decimal("12.50"),
+        )
+        UserLibraryBook.objects.create(user=self.user, book=own_private_book)
+        UserLibraryBook.objects.create(user=self.user, book=foreign_private_book)
+        UserLibraryBook.objects.create(user=self.other_user, book=public_book)
+
+        response = self.client.get(self.list_url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 2)
+        result_book_ids = {item["book"]["id"] for item in response.data["results"]}
+        self.assertEqual(
+            result_book_ids,
+            {str(public_book.id), str(own_private_book.id)},
+        )
+        serialized_entry = next(
+            item for item in response.data["results"] if item["id"] == public_entry.id
+        )
+        self.assertEqual(serialized_entry["reading_location"], {"chapter": "chapter-3"})
+        self.assertEqual(serialized_entry["reading_percentage"], "12.50")
+        self.assertNotIn("uploaded_by", serialized_entry["book"])
+        self.assertNotIn("storage_key", serialized_entry["book"])
+
+    def test_library_is_paginated_in_newest_added_order(self):
+        for number in range(21):
+            book = self.create_model_book(title=f"Книга {number:02d}")
+            UserLibraryBook.objects.create(user=self.user, book=book)
+        expected_ids = [
+            entry_id
+            for entry_id in UserLibraryBook.objects.filter(user=self.user)
+            .order_by("-added_at", "-id")
+            .values_list("id", flat=True)
+        ]
+
+        first_page = self.client.get(self.list_url)
+        second_page = self.client.get(self.list_url, {"page": 2})
+
+        self.assertEqual(first_page.data["count"], 21)
+        self.assertEqual(
+            [item["id"] for item in first_page.data["results"]],
+            expected_ids[:20],
+        )
+        self.assertEqual(
+            [item["id"] for item in second_page.data["results"]],
+            expected_ids[20:],
+        )
+
+    def test_adding_public_book_is_idempotent(self):
+        book = self.create_model_book()
+        url = reverse("knowledge_library_add", kwargs={"book_uuid": book.id})
+
+        first_response = self.client.post(url)
+        second_response = self.client.post(url)
+
+        self.assertEqual(first_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(first_response.data["id"], second_response.data["id"])
+        self.assertEqual(
+            UserLibraryBook.objects.filter(user=self.user, book=book).count(),
+            1,
+        )
+
+    def test_foreign_private_book_cannot_be_added(self):
+        book = self.create_model_book(visibility=Book.Visibility.PRIVATE)
+        url = reverse("knowledge_library_add", kwargs={"book_uuid": book.id})
+
+        response = self.client.post(url)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            UserLibraryBook.objects.filter(user=self.user, book=book).exists()
+        )
+
+
+class KnowledgeProfileAPITests(KnowledgeAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.authenticate()
+        self.url = reverse("knowledge_profile")
+
+    def test_returns_only_current_users_profile(self):
+        profile = KnowledgeProfile.objects.create(
+            user=self.user,
+            display_name="Автор материалов",
+            bio="Описание автора",
+            avatar="avatars/profile/original.webp",
+        )
+        other_profile = KnowledgeProfile.objects.create(
+            user=self.other_user,
+            display_name="Чужой автор",
+        )
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], profile.id)
+        self.assertEqual(response.data["display_name"], "Автор материалов")
+        self.assertNotEqual(response.data["id"], other_profile.id)
+        self.assertNotIn("user", response.data)
+
+    def test_missing_profile_returns_not_found(self):
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)

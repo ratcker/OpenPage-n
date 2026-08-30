@@ -157,6 +157,7 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
     "TAGS": [
         {
             "name": "Авторизация",
@@ -165,6 +166,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Состояние",
             "description": "Простая проверка доступности процесса API.",
+        },
+        {
+            "name": "База знаний",
+            "description": "Загрузка книг, каталог, библиотека и профиль автора.",
         },
     ],
     "SWAGGER_UI_SETTINGS": {

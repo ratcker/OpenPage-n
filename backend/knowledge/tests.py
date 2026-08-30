@@ -1,6 +1,7 @@
 import uuid
 from decimal import Decimal
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
@@ -9,7 +10,22 @@ from django.test import SimpleTestCase, TestCase
 from accounts.models import User
 
 from .models import Book, KnowledgeProfile, UserLibraryBook
+from .services import create_book
 from .storage import LocalKnowledgeStorage, book_storage_key
+
+
+class TrackingLocalKnowledgeStorage(LocalKnowledgeStorage):
+    last_key = None
+
+    def save(self, key, content):
+        self.last_key = key
+        return super().save(key, content)
+
+
+class FailingAfterSaveStorage(TrackingLocalKnowledgeStorage):
+    def save(self, key, content):
+        super().save(key, content)
+        raise OSError("Storage failure")
 
 
 class KnowledgeModelTests(TestCase):
@@ -128,3 +144,115 @@ class LocalKnowledgeStorageTests(SimpleTestCase):
 
             with self.assertRaises(ValueError):
                 book_storage_key(uuid.uuid4(), "txt")
+
+
+class CreateBookTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = User.objects.create_user(
+            email="uploader@example.com",
+            name="Загрузивший книгу",
+            password="test-password",
+        )
+
+    def create_book(self, storage, **changes):
+        data = {
+            "user": self.user,
+            "content": b"epub file content",
+            "title": "Новая книга",
+            "author": "Автор книги",
+            "description": "Описание",
+            "format": Book.Format.EPUB,
+            "visibility": Book.Visibility.PRIVATE,
+            "storage": storage,
+        }
+        data.update(changes)
+        return create_book(**data)
+
+    def test_creates_ready_epub_and_adds_it_to_user_library(self):
+        with TemporaryDirectory() as root:
+            storage = TrackingLocalKnowledgeStorage(root=root)
+
+            book = self.create_book(storage)
+
+            book.refresh_from_db()
+            self.assertEqual(book.status, Book.Status.READY)
+            self.assertEqual(
+                book.storage_key,
+                f"books/{book.id}/original.epub",
+            )
+            self.assertTrue(storage.exists(book.storage_key))
+            with storage.open(book.storage_key) as stored_file:
+                self.assertEqual(stored_file.read(), b"epub file content")
+
+            library_entry = UserLibraryBook.objects.get(
+                user=self.user,
+                book=book,
+            )
+            self.assertEqual(library_entry.reading_location, {})
+            self.assertEqual(library_entry.reading_percentage, Decimal("0.00"))
+
+    def test_creates_ready_pdf_with_original_content(self):
+        with TemporaryDirectory() as root:
+            storage = TrackingLocalKnowledgeStorage(root=root)
+            content = b"%PDF test content"
+
+            book = self.create_book(
+                storage,
+                content=content,
+                format=Book.Format.PDF,
+                visibility=Book.Visibility.PUBLIC,
+            )
+
+            book.refresh_from_db()
+            self.assertEqual(book.status, Book.Status.READY)
+            self.assertEqual(book.format, Book.Format.PDF)
+            self.assertEqual(book.visibility, Book.Visibility.PUBLIC)
+            self.assertEqual(
+                book.storage_key,
+                f"books/{book.id}/original.pdf",
+            )
+            with storage.open(book.storage_key) as stored_file:
+                self.assertEqual(stored_file.read(), content)
+            self.assertTrue(
+                UserLibraryBook.objects.filter(user=self.user, book=book).exists()
+            )
+
+    def test_storage_failure_rolls_back_database_and_removes_partial_file(self):
+        with TemporaryDirectory() as root:
+            storage = FailingAfterSaveStorage(root=root)
+
+            with self.assertRaises(OSError):
+                self.create_book(storage)
+
+            self.assertFalse(Book.objects.exists())
+            self.assertFalse(UserLibraryBook.objects.exists())
+            self.assertIsNotNone(storage.last_key)
+            self.assertFalse(storage.exists(storage.last_key))
+
+    def test_library_failure_rolls_back_book_and_removes_saved_file(self):
+        with TemporaryDirectory() as root:
+            storage = TrackingLocalKnowledgeStorage(root=root)
+
+            with patch(
+                "knowledge.services.UserLibraryBook.objects.create",
+                side_effect=IntegrityError("Library failure"),
+            ):
+                with self.assertRaises(IntegrityError):
+                    self.create_book(storage)
+
+            self.assertFalse(Book.objects.exists())
+            self.assertFalse(UserLibraryBook.objects.exists())
+            self.assertIsNotNone(storage.last_key)
+            self.assertFalse(storage.exists(storage.last_key))
+
+    def test_rejects_unsupported_format_before_creating_resources(self):
+        with TemporaryDirectory() as root:
+            storage = TrackingLocalKnowledgeStorage(root=root)
+
+            with self.assertRaises(ValidationError):
+                self.create_book(storage, format="txt")
+
+            self.assertFalse(Book.objects.exists())
+            self.assertFalse(UserLibraryBook.objects.exists())
+            self.assertIsNone(storage.last_key)
