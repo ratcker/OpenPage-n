@@ -37,6 +37,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "core",
     "accounts",
+    "knowledge",
     "rest_framework_simplejwt.token_blacklist",
 ]
 
@@ -79,7 +80,7 @@ if DATABASE_ENGINE == "sqlite3":
     }
 elif DATABASE_ENGINE == "postgresql":
     DATABASES = {
-           "default": {
+        "default": {
             "ENGINE": "django.db.backends.postgresql",
             "NAME": os.environ["POSTGRES_DB"],
             "USER": os.environ["POSTGRES_USER"],
@@ -89,9 +90,7 @@ elif DATABASE_ENGINE == "postgresql":
         }
     }
 else:
-    raise ImproperlyConfigured(
-        f"Unsupported DJANGO_DATABASE_ENGINE: {DATABASE_ENGINE}"
-    )
+    raise ImproperlyConfigured(f"Unsupported DJANGO_DATABASE_ENGINE: {DATABASE_ENGINE}")
 
 LANGUAGE_CODE = "ru-ru"
 TIME_ZONE = "Europe/Moscow"
@@ -101,6 +100,9 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
+# Локальное хранилище файлов приложений
+MEDIA_ROOT = BASE_DIR / "media"
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "accounts.User"
@@ -108,29 +110,13 @@ AUTH_USER_MODEL = "accounts.User"
 AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": (
-            "django.contrib.auth.password_validation."
-            "UserAttributeSimilarityValidator"
+            "django.contrib.auth.password_validation.UserAttributeSimilarityValidator"
         ),
         "OPTIONS": {"user_attributes": ("email", "name")},
     },
-    {
-        "NAME": (
-            "django.contrib.auth.password_validation."
-            "MinimumLengthValidator"
-        )
-    },
-    {
-        "NAME": (
-            "django.contrib.auth.password_validation."
-            "CommonPasswordValidator"
-        )
-    },
-    {
-        "NAME": (
-            "django.contrib.auth.password_validation."
-            "NumericPasswordValidator"
-        )
-    },
+    {"NAME": ("django.contrib.auth.password_validation.MinimumLengthValidator")},
+    {"NAME": ("django.contrib.auth.password_validation.CommonPasswordValidator")},
+    {"NAME": ("django.contrib.auth.password_validation.NumericPasswordValidator")},
 ]
 
 # Email
@@ -159,7 +145,7 @@ REST_FRAMEWORK = {
     "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
-    )
+    ),
 }
 
 SPECTACULAR_SETTINGS = {

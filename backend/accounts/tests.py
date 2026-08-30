@@ -40,7 +40,8 @@ class RegistrationTests(APITestCase):
 
     def allow_resend(self, pending):
         pending.sent_at = (
-            timezone.now() - settings.REGISTRATION_RESEND_COOLDOWN
+            timezone.now()
+            - settings.REGISTRATION_RESEND_COOLDOWN
             - timedelta(seconds=1)
         )
         pending.save(update_fields=["sent_at"])
@@ -73,9 +74,7 @@ class RegistrationTests(APITestCase):
         self.assertNotIn("_auth_user_id", self.client.session)
         self.assertFalse(User.objects.exists())
 
-        pending = PendingRegistration.objects.get(
-            email="new.user@example.com"
-        )
+        pending = PendingRegistration.objects.get(email="new.user@example.com")
         code = self.code_from_last_email()
         self.assertEqual(pending.name, "Новый пользователь")
         self.assertNotEqual(pending.password_hash, self.password)
@@ -262,12 +261,7 @@ class RegistrationTests(APITestCase):
         )
         self.assertEqual(
             response.data,
-            {
-                "detail": (
-                    "Не удалось отправить код подтверждения. "
-                    "Попробуйте позже."
-                )
-            },
+            {"detail": "Не удалось отправить код подтверждения. Попробуйте позже."},
         )
         self.assertFalse(PendingRegistration.objects.exists())
         self.assertFalse(User.objects.exists())
@@ -452,14 +446,13 @@ class EmailVerificationTests(APITestCase):
         _, old_code = self.register()
         pending = PendingRegistration.objects.get()
         pending.sent_at = (
-            timezone.now() - settings.REGISTRATION_RESEND_COOLDOWN
+            timezone.now()
+            - settings.REGISTRATION_RESEND_COOLDOWN
             - timedelta(seconds=1)
         )
         pending.save(update_fields=["sent_at"])
         self.registration_data["password"] = "AnotherStrongPassword123!"
-        self.registration_data["password_confirm"] = (
-            "AnotherStrongPassword123!"
-        )
+        self.registration_data["password_confirm"] = "AnotherStrongPassword123!"
 
         _, new_code = self.register()
         old_response = self.verify(old_code)
@@ -470,9 +463,7 @@ class EmailVerificationTests(APITestCase):
             status.HTTP_400_BAD_REQUEST,
         )
         self.assertEqual(new_response.status_code, status.HTTP_201_CREATED)
-        self.assertTrue(
-            User.objects.get().check_password("AnotherStrongPassword123!")
-        )
+        self.assertTrue(User.objects.get().check_password("AnotherStrongPassword123!"))
 
     def test_missing_request_and_invalid_code_format_are_rejected(self):
         missing_response = self.verify("123456")

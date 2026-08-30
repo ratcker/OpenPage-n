@@ -128,8 +128,7 @@ CLEAR_LOGOUT_COOKIE_HEADER = OpenApiParameter(
     location=OpenApiParameter.HEADER,
     response=[200],
     description=(
-        "Удаляет refresh-cookie через `Max-Age=0`, `Path=/api/auth` и "
-        "`SameSite=Lax`."
+        "Удаляет refresh-cookie через `Max-Age=0`, `Path=/api/auth` и `SameSite=Lax`."
     ),
 )
 
@@ -224,9 +223,7 @@ class MeView(APIView):
                     ],
                     resource_type_field_name=None,
                 ),
-                description=(
-                    "Access-токен отсутствует, просрочен или недействителен."
-                ),
+                description="Access-токен отсутствует, просрочен или недействителен.",
                 examples=[
                     OpenApiExample(
                         "Токен отсутствует",
@@ -237,8 +234,7 @@ class MeView(APIView):
                         "Токен недействителен",
                         value={
                             "detail": (
-                                "Данный токен недействителен для любого типа "
-                                "токенов"
+                                "Данный токен недействителен для любого типа токенов"
                             ),
                             "code": "token_not_valid",
                             "messages": [
@@ -250,7 +246,7 @@ class MeView(APIView):
                             ],
                         },
                         response_only=True,
-                    )
+                    ),
                 ],
             ),
         },
@@ -355,8 +351,7 @@ class RegisterView(APIView):
                 )
 
                 if pending and (
-                    pending.sent_at
-                    > now - settings.REGISTRATION_RESEND_COOLDOWN
+                    pending.sent_at > now - settings.REGISTRATION_RESEND_COOLDOWN
                 ):
                     raise ValidationError(
                         {
@@ -390,8 +385,7 @@ class RegisterView(APIView):
             return Response(
                 {
                     "detail": (
-                        "Не удалось отправить код подтверждения. "
-                        "Попробуйте позже."
+                        "Не удалось отправить код подтверждения. Попробуйте позже."
                     )
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -438,9 +432,7 @@ class VerifyEmailView(APIView):
             ),
             400: OpenApiResponse(
                 response=VALIDATION_ERROR_SCHEMA,
-                description=(
-                    "Заявка или код недействительны, либо email уже занят."
-                ),
+                description="Заявка или код недействительны, либо email уже занят.",
                 examples=[
                     OpenApiExample(
                         "Неверный код",
@@ -482,8 +474,7 @@ class VerifyEmailView(APIView):
                 raise ValidationError(
                     {
                         "email": (
-                            "Заявка на регистрацию не найдена. "
-                            "Запросите новый код."
+                            "Заявка на регистрацию не найдена. Запросите новый код."
                         )
                     }
                 )
@@ -495,20 +486,12 @@ class VerifyEmailView(APIView):
 
             if pending.expires_at <= timezone.now():
                 raise ValidationError(
-                    {
-                        "code": (
-                            "Срок действия кода истёк. Запросите новый код."
-                        )
-                    }
+                    {"code": "Срок действия кода истёк. Запросите новый код."}
                 )
 
             if pending.failed_attempts >= settings.REGISTRATION_MAX_ATTEMPTS:
                 raise ValidationError(
-                    {
-                        "code": (
-                            "Превышен лимит попыток. Запросите новый код."
-                        )
-                    }
+                    {"code": "Превышен лимит попыток. Запросите новый код."}
                 )
 
             if not check_password(code, pending.code_hash):
@@ -516,14 +499,10 @@ class VerifyEmailView(APIView):
                 pending.save(update_fields=["failed_attempts"])
                 if pending.failed_attempts >= settings.REGISTRATION_MAX_ATTEMPTS:
                     verification_error = {
-                        "code": (
-                            "Превышен лимит попыток. Запросите новый код."
-                        )
+                        "code": "Превышен лимит попыток. Запросите новый код."
                     }
                 else:
-                    verification_error = {
-                        "code": "Неверный код подтверждения."
-                    }
+                    verification_error = {"code": "Неверный код подтверждения."}
             else:
                 try:
                     with transaction.atomic():
@@ -534,9 +513,7 @@ class VerifyEmailView(APIView):
                         )
                 except IntegrityError:
                     verification_error = {
-                        "email": (
-                            "Пользователь с таким email уже существует."
-                        )
+                        "email": "Пользователь с таким email уже существует."
                     }
                 else:
                     pending.delete()
@@ -585,9 +562,7 @@ class LoginView(APIView):
                 examples=[
                     OpenApiExample(
                         "Неверные данные",
-                        value={
-                            "non_field_errors": ["Неверный email или пароль."]
-                        },
+                        value={"non_field_errors": ["Неверный email или пароль."]},
                         response_only=True,
                     )
                 ],
