@@ -137,7 +137,6 @@ describe('авторизация и маршруты', () => {
   it.each([
     ['/', 'Перейти в хаб'],
     ['/hub', 'Сервисы рядом'],
-    ['/knowledge', 'База знаний'],
   ])('оставляет %s публичным', (route, accessibleName) => {
     renderApp(route, false);
 
@@ -145,35 +144,59 @@ describe('авторизация и маршруты', () => {
   });
 
   it('открывает Базу знаний из каталога, сохраняя карточку будущих сервисов', async () => {
+    const emptyPage = {
+      count: 0,
+      next: null,
+      previous: null,
+      results: [],
+    };
+    const fetchMock = mockApi({
+      '/api/auth/refresh/': () => Promise.resolve(jsonResponse(session)),
+      '/api/knowledge/books/': () => Promise.resolve(jsonResponse(emptyPage)),
+      '/api/knowledge/library/': () => Promise.resolve(jsonResponse(emptyPage)),
+      '/api/knowledge/profile/': () => Promise.resolve(jsonResponse({ detail: 'Не найдено' }, 404)),
+    });
     const browser = userEvent.setup();
-    renderApp('/hub', false);
+    renderApp('/hub');
 
     expect(screen.getByText('Готовим новые сервисы.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/refresh/',
+        expect.anything(),
+      );
+    });
     await browser.click(screen.getByRole('link', { name: /База знаний/ }));
 
-    expect(screen.getByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Книги' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('переключает разделы и локально обновляет авторский профиль', async () => {
-    const browser = userEvent.setup();
-    renderApp('/knowledge', false);
+  it('открывает анонимному читателю публичную Базу знаний', async () => {
+    const emptyPage = {
+      count: 0,
+      next: null,
+      previous: null,
+      results: [],
+    };
+    const fetchMock = mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+      '/api/knowledge/books/': () => Promise.resolve(jsonResponse(emptyPage)),
+    });
 
-    await browser.click(screen.getByRole('tab', { name: 'Статьи' }));
-    expect(screen.getByRole('heading', { name: 'Статьи' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Ваши книги' })).not.toBeInTheDocument();
+    renderApp('/knowledge');
 
-    await browser.click(screen.getByRole('tab', { name: 'Книги' }));
-    await browser.click(screen.getByRole('button', { name: 'Настроить профиль' }));
+    expect(await screen.findByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Публичный каталог' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', {
+      name: 'Войдите, чтобы открыть личную библиотеку.',
+    })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
 
-    const dialog = screen.getByRole('dialog', { name: 'Настройка профиля' });
-    const nameInput = screen.getByLabelText('Имя', { selector: 'input' });
-    await browser.clear(nameInput);
-    await browser.type(nameInput, 'Анна Петрова');
-    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
-
-    expect(dialog).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Анна Петрова' })).toBeInTheDocument();
+    const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
+    expect(requestedPaths).toContain('/api/knowledge/books/');
+    expect(requestedPaths).not.toContain('/api/knowledge/library/');
+    expect(requestedPaths).not.toContain('/api/knowledge/profile/');
   });
 
   it('автоматически входит после подтверждения email', async () => {

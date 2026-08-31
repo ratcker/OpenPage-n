@@ -5,7 +5,7 @@ from rest_framework import status
 from rest_framework.exceptions import PermissionDenied
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import MultiPartParser
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Book, KnowledgeProfile, UserLibraryBook
@@ -41,18 +41,18 @@ class BookListView(GenericAPIView):
     pagination_class = KnowledgePagination
     serializer_class = BookSerializer
 
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return (AllowAny(),)
+        return super().get_permissions()
+
     @extend_schema(
         operation_id="knowledge_books_list",
         summary="Получить каталог книг",
         description="Возвращает только публичные книги, новые сверху.",
         tags=[KNOWLEDGE_TAG],
-        responses={
-            200: BookSerializer(many=True),
-            401: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Access-токен отсутствует или недействителен.",
-            ),
-        },
+        auth=[],
+        responses={200: BookSerializer(many=True)},
     )
     def get(self, request):
         books = Book.objects.filter(
@@ -138,20 +138,20 @@ class BookListView(GenericAPIView):
 
 
 class BookDetailView(GenericAPIView):
-    permission_classes = (IsAuthenticated,)
+    permission_classes = (AllowAny,)
     serializer_class = BookSerializer
 
     @extend_schema(
         operation_id="knowledge_books_retrieve",
         summary="Получить книгу",
         description=(
-            "Публичная книга доступна всем авторизованным пользователям, "
+            "Публичная книга доступна всем пользователям, "
             "приватная — только загрузившему её пользователю."
         ),
         tags=[KNOWLEDGE_TAG],
+        auth=[],
         responses={
             200: BookSerializer,
-            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(
                 response=KnowledgeDetailResponseSerializer,
                 description="Чужая приватная книга.",

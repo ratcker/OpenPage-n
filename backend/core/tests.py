@@ -55,18 +55,17 @@ class DocumentationTests(SimpleTestCase):
 
     def test_schema_marks_authenticated_operations_as_bearer_protected(self):
         schema = self.schema()
-        protected_paths = {
-            "/api/auth/me/",
-            "/api/knowledge/books/",
-            "/api/knowledge/books/{book_uuid}/",
-            "/api/knowledge/library/",
-            "/api/knowledge/library/{book_uuid}/",
-            "/api/knowledge/profile/",
+        protected_operations = {
+            ("/api/auth/me/", "get"),
+            ("/api/knowledge/books/", "post"),
+            ("/api/knowledge/library/", "get"),
+            ("/api/knowledge/library/{book_uuid}/", "post"),
+            ("/api/knowledge/profile/", "get"),
         }
 
         for path, methods in schema["paths"].items():
-            for operation in methods.values():
-                if path in protected_paths:
+            for method, operation in methods.items():
+                if (path, method) in protected_operations:
                     self.assertEqual(operation["security"], [{"jwtAuth": []}])
                 else:
                     self.assertNotIn("security", operation)

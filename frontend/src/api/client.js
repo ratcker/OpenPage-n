@@ -16,12 +16,16 @@ function errorMessage(data) {
     || (Array.isArray(fieldError) ? fieldError[0] : fieldError);
 }
 
-// Базовый запрос к API авторизации
+function resolveApiUrl(path) {
+  return path.startsWith('/api/') ? path : `${AUTH_URL}${path}`;
+}
+
+// Базовый запрос к API
 export async function request(path, options = {}) {
   let response;
 
   try {
-    response = await fetch(`${AUTH_URL}${path}`, {
+    response = await fetch(resolveApiUrl(path), {
       credentials: 'include',
       ...options,
     });

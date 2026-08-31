@@ -43,6 +43,17 @@ a {
   text-decoration: none;
 }
 
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* Каркас */
 .page {
   min-height: 100vh;
@@ -717,6 +728,12 @@ a {
   gap: 32px;
 }
 
+.knowledge-books-column {
+  min-width: 0;
+  display: grid;
+  gap: 64px;
+}
+
 .author-profile {
   display: grid;
   justify-items: start;
@@ -760,26 +777,12 @@ a {
   line-height: 1.5;
 }
 
-.author-profile .secondary-button {
-  width: 100%;
-  margin-top: 4px;
-}
-
-.secondary-button {
-  min-height: 40px;
-  padding: 0 14px;
-  border: 1px solid #3a3542;
-  border-radius: 8px;
-  color: var(--soft-text);
-  background: #18151d;
-  cursor: pointer;
-  font-size: 0.8rem;
-  font-weight: 600;
-}
-
-.secondary-button:hover {
-  border-color: #5b4c70;
-  color: var(--text);
+.author-profile-loading .author-avatar,
+.book-card-loading .book-cover,
+.book-card-loading span,
+.book-card-loading i {
+  border-color: #302b38;
+  background: #1b1820;
 }
 
 .knowledge-catalog {
@@ -890,6 +893,95 @@ a {
   font-weight: 580;
 }
 
+.book-description {
+  display: -webkit-box;
+  margin-top: 9px;
+  overflow: hidden;
+  color: var(--muted-text);
+  font-size: 0.75rem;
+  line-height: 1.45;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.book-progress {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+  color: var(--muted-text);
+  font-size: 0.72rem;
+}
+
+.book-progress strong {
+  color: #c9b6ef;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.book-card-loading > div:last-child {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.book-card-loading span,
+.book-card-loading i {
+  display: block;
+  height: 9px;
+  border-radius: 4px;
+}
+
+.book-card-loading span {
+  width: 42%;
+}
+
+.book-card-loading i {
+  width: 76%;
+  height: 14px;
+}
+
+.knowledge-message {
+  min-height: 210px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.knowledge-message h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.knowledge-message p {
+  max-width: 440px;
+  margin: 9px 0 0;
+  color: var(--muted-text);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}
+
+.knowledge-login-link {
+  margin-top: 18px;
+  padding-bottom: 3px;
+  border-bottom: 1px solid #7050a5;
+  color: #c9b6ef;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.knowledge-login-link:hover {
+  color: var(--text);
+}
+
 .articles-catalog {
   max-width: 900px;
   margin: 0 auto;
@@ -942,108 +1034,6 @@ a {
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.6;
-}
-
-.profile-settings-backdrop {
-  position: fixed;
-  z-index: 30;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  padding: 24px;
-  background: rgba(8, 7, 11, 0.82);
-}
-
-.profile-settings-dialog {
-  width: min(100%, 500px);
-  padding: 30px;
-  border: 1px solid #3b3544;
-  border-radius: 8px;
-  background: var(--surface);
-}
-
-.profile-settings-heading {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 24px;
-}
-
-.profile-settings-heading h2 {
-  margin: 0;
-  font-size: 1.55rem;
-  font-weight: 620;
-}
-
-.dialog-close {
-  width: 34px;
-  height: 34px;
-  display: grid;
-  flex: 0 0 auto;
-  place-items: center;
-  padding: 0 0 2px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  color: var(--muted-text);
-  background: transparent;
-  cursor: pointer;
-  font-size: 1.25rem;
-  line-height: 1;
-}
-
-.dialog-close:hover {
-  color: var(--text);
-}
-
-.profile-settings-form {
-  display: grid;
-  gap: 18px;
-  margin-top: 28px;
-}
-
-.profile-settings-form label {
-  display: grid;
-  gap: 8px;
-  color: var(--soft-text);
-  font-size: 0.78rem;
-}
-
-.profile-settings-form input,
-.profile-settings-form textarea {
-  width: 100%;
-  padding: 11px 13px;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  outline: none;
-  color: var(--text);
-  background: #100e15;
-  font: inherit;
-  font-size: 0.85rem;
-  resize: vertical;
-}
-
-.profile-settings-form input:focus,
-.profile-settings-form textarea:focus {
-  border-color: var(--accent);
-}
-
-.avatar-setting {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  align-items: center;
-  gap: 18px;
-}
-
-.avatar-setting .author-avatar {
-  width: 70px;
-  height: 70px;
-}
-
-.profile-settings-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 10px;
-  margin-top: 6px;
 }
 
 /* Подвал */
@@ -1305,35 +1295,6 @@ a {
 
   .article-card > svg {
     display: none;
-  }
-
-  .profile-settings-backdrop {
-    align-items: end;
-    padding: 12px;
-  }
-
-  .profile-settings-dialog {
-    max-height: calc(100dvh - 24px);
-    padding: 24px;
-    overflow-y: auto;
-  }
-
-  .avatar-setting {
-    grid-template-columns: 58px 1fr;
-  }
-
-  .avatar-setting .author-avatar {
-    width: 58px;
-    height: 58px;
-  }
-
-  .profile-settings-actions {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-  }
-
-  .profile-settings-actions .primary-button {
-    width: auto;
   }
 
   .footer-inner {

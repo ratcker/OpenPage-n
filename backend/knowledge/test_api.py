@@ -272,18 +272,43 @@ class BookDetailAPITests(KnowledgeAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
+class AnonymousKnowledgeAPITests(KnowledgeAPITestCase):
+    def test_catalog_contains_public_books_but_not_private_books(self):
+        public_book = self.create_model_book()
+        private_book = self.create_model_book(visibility=Book.Visibility.PRIVATE)
+
+        response = self.client.get(reverse("knowledge_books"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        result_ids = {item["id"] for item in response.data["results"]}
+        self.assertIn(str(public_book.id), result_ids)
+        self.assertNotIn(str(private_book.id), result_ids)
+
+    def test_public_book_detail_is_available(self):
+        book = self.create_model_book()
+
+        response = self.client.get(
+            reverse("knowledge_book_detail", kwargs={"book_uuid": book.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["id"], str(book.id))
+
+    def test_private_book_detail_is_forbidden(self):
+        book = self.create_model_book(visibility=Book.Visibility.PRIVATE)
+
+        response = self.client.get(
+            reverse("knowledge_book_detail", kwargs={"book_uuid": book.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
 class KnowledgeAPIAuthenticationTests(KnowledgeAPITestCase):
-    def test_all_read_and_library_endpoints_require_authentication(self):
+    def test_upload_library_and_profile_still_require_authentication(self):
         book = self.create_model_book()
         endpoints = (
-            ("get", reverse("knowledge_books")),
-            (
-                "get",
-                reverse(
-                    "knowledge_book_detail",
-                    kwargs={"book_uuid": book.id},
-                ),
-            ),
+            ("post", reverse("knowledge_books")),
             ("get", reverse("knowledge_library")),
             (
                 "post",
