@@ -146,6 +146,7 @@ describe('KnowledgePage', () => {
     expect(screen.getByText(profile.bio)).toBeInTheDocument();
     expect(screen.getByText('АК')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Добавить в библиотеку' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Редактировать профиль' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Загрузить книгу' })).toBeInTheDocument();
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -179,6 +180,7 @@ describe('KnowledgePage', () => {
     })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Войти' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Войти, чтобы добавить' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Создать профиль автора' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Добавить в библиотеку' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
 
@@ -453,6 +455,7 @@ describe('KnowledgePage', () => {
     expect(await screen.findByRole('heading', { name: 'Профиль автора не создан' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Создать профиль автора' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
   });
 

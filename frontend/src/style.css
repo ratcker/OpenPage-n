@@ -777,20 +777,37 @@ a {
   line-height: 1.5;
 }
 
-.author-upload-button {
+.author-profile-actions {
+  width: 100%;
+  display: grid;
+  gap: 8px;
+}
+
+.author-profile-button {
   width: 100%;
   min-height: 40px;
   padding: 0 14px;
-  border: 1px solid #68499b;
+  border: 1px solid #3d3449;
   border-radius: 8px;
-  color: #e9e0fb;
-  background: #2a2037;
+  color: var(--soft-text);
+  background: #18141e;
   cursor: pointer;
   font-size: 0.8rem;
   font-weight: 600;
 }
 
-.author-upload-button:hover {
+.author-profile-button:hover {
+  border-color: #7050a5;
+  color: var(--text);
+}
+
+.author-profile-button-primary {
+  border-color: #68499b;
+  color: #e9e0fb;
+  background: #2a2037;
+}
+
+.author-profile-button-primary:hover {
   border-color: #8f68ca;
   background: #332542;
 }

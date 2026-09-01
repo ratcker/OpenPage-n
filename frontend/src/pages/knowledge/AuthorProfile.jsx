@@ -37,6 +37,9 @@ export default function AuthorProfile({ state, onUpload }) {
           <h2 id="public-reader-title">Публичный каталог</h2>
           <p>Для просмотра общедоступных книг вход не требуется.</p>
         </div>
+        <button className="author-profile-button author-profile-button-primary" type="button">
+          Создать профиль автора
+        </button>
       </section>
     );
   }
@@ -50,6 +53,9 @@ export default function AuthorProfile({ state, onUpload }) {
           <h2 id="reader-profile-title">Профиль автора не создан</h2>
           <p>Библиотека и публичный каталог остаются доступны.</p>
         </div>
+        <button className="author-profile-button author-profile-button-primary" type="button">
+          Создать профиль автора
+        </button>
       </section>
     );
   }
@@ -77,9 +83,18 @@ export default function AuthorProfile({ state, onUpload }) {
         <h2 id="author-profile-title">{profile.display_name}</h2>
         <p>{profile.bio}</p>
       </div>
-      <button className="author-upload-button" type="button" onClick={onUpload}>
-        Загрузить книгу
-      </button>
+      <div className="author-profile-actions">
+        <button className="author-profile-button" type="button">
+          Редактировать профиль
+        </button>
+        <button
+          className="author-profile-button author-profile-button-primary"
+          type="button"
+          onClick={onUpload}
+        >
+          Загрузить книгу
+        </button>
+      </div>
     </section>
   );
 }
