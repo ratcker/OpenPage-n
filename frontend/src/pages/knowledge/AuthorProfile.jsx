@@ -15,7 +15,7 @@ function avatarLabel(profile) {
     : initials(profile.display_name);
 }
 
-export default function AuthorProfile({ state }) {
+export default function AuthorProfile({ state, onUpload }) {
   if (state.status === 'loading') {
     return (
       <section className="author-profile author-profile-loading" role="status">
@@ -77,6 +77,9 @@ export default function AuthorProfile({ state }) {
         <h2 id="author-profile-title">{profile.display_name}</h2>
         <p>{profile.bio}</p>
       </div>
+      <button className="author-upload-button" type="button" onClick={onUpload}>
+        Загрузить книгу
+      </button>
     </section>
   );
 }

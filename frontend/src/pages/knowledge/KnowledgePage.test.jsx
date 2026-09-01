@@ -1,4 +1,10 @@
-import { cleanup, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -52,6 +58,14 @@ const profile = {
   avatar: 'АК',
 };
 
+function deferred() {
+  let resolve;
+  const promise = new Promise((promiseResolve) => {
+    resolve = promiseResolve;
+  });
+  return { promise, resolve };
+}
+
 function page(results) {
   return {
     count: results.length,
@@ -92,6 +106,26 @@ function renderPage(authStatus = 'authenticated') {
   );
 }
 
+async function fillUploadForm(browser, changes = {}) {
+  const values = {
+    file: new File(['book-content'], 'book.epub', { type: 'application/epub+zip' }),
+    title: 'Новая книга',
+    author: 'Новый автор',
+    description: 'Новое описание',
+    format: 'epub',
+    visibility: 'private',
+    ...changes,
+  };
+
+  await browser.upload(screen.getByLabelText('Файл'), values.file);
+  await browser.type(screen.getByLabelText('Название'), values.title);
+  await browser.type(screen.getByLabelText('Автор'), values.author);
+  await browser.type(screen.getByLabelText('Описание'), values.description);
+  await browser.selectOptions(screen.getByLabelText('Формат'), values.format);
+  await browser.selectOptions(screen.getByLabelText('Видимость'), values.visibility);
+  return values;
+}
+
 afterEach(() => {
   cleanup();
   clearSession();
@@ -111,6 +145,8 @@ describe('KnowledgePage', () => {
     expect(screen.getByRole('heading', { name: profile.display_name })).toBeInTheDocument();
     expect(screen.getByText(profile.bio)).toBeInTheDocument();
     expect(screen.getByText('АК')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Добавить в библиотеку' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Загрузить книгу' })).toBeInTheDocument();
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/knowledge/books/',
@@ -142,9 +178,68 @@ describe('KnowledgePage', () => {
       name: 'Войдите, чтобы открыть личную библиотеку.',
     })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Войти' })).toHaveAttribute('href', '/login');
+    expect(screen.getByRole('link', { name: 'Войти, чтобы добавить' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Добавить в библиотеку' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
 
     const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
     expect(requestedPaths).toEqual(['/api/knowledge/books/']);
+  });
+
+  it('показывает статус книги, уже находящейся в библиотеке', async () => {
+    const existingEntry = { ...libraryItem, id: 24, book: publicBook };
+    mockKnowledgeApi({
+      '/api/knowledge/library/': () => Promise.resolve(
+        jsonResponse(page([existingEntry, libraryItem])),
+      ),
+    });
+
+    renderPage();
+
+    expect(await screen.findByRole('button', { name: 'В библиотеке' })).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Добавить в библиотеку' })).not.toBeInTheDocument();
+  });
+
+  it.each([200, 201])('считает add response %s успешным и обновляет библиотеку', async (responseStatus) => {
+    const addedEntry = {
+      ...libraryItem,
+      id: 25,
+      book: publicBook,
+      reading_percentage: '0.00',
+    };
+    const addPath = `/api/knowledge/library/${publicBook.id}/`;
+    const addHandler = vi.fn(() => Promise.resolve(jsonResponse(addedEntry, responseStatus)));
+    const fetchMock = mockKnowledgeApi({ [addPath]: addHandler });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Добавить в библиотеку' }));
+
+    expect(await screen.findByRole('button', { name: 'В библиотеке' })).toBeDisabled();
+    const library = screen.getByRole('region', { name: 'Ваши книги' });
+    expect(within(library).getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
+    expect(addHandler).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(addPath, expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({ Authorization: 'Bearer knowledge-token' }),
+    }));
+  });
+
+  it('оставляет каталог рабочим при ошибке добавления', async () => {
+    const addPath = `/api/knowledge/library/${publicBook.id}/`;
+    mockKnowledgeApi({
+      [addPath]: () => Promise.resolve(jsonResponse({ detail: 'Ошибка добавления' }, 500)),
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Добавить в библиотеку' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось добавить книгу. Попробуйте ещё раз.',
+    );
+    expect(screen.getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Добавить в библиотеку' })).toBeEnabled();
   });
 
   it('показывает независимые loading states без изменения макета', () => {
@@ -202,6 +297,150 @@ describe('KnowledgePage', () => {
     expect(screen.getByRole('heading', { name: profile.display_name })).toBeInTheDocument();
   });
 
+  it('показывает upload form со всеми полями только автору', async () => {
+    mockKnowledgeApi();
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Загрузить книгу' }));
+
+    expect(screen.getByRole('dialog', { name: 'Загрузить книгу' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Файл')).toHaveAttribute('type', 'file');
+    expect(screen.getByLabelText('Название')).toBeInTheDocument();
+    expect(screen.getByLabelText('Автор')).toBeInTheDocument();
+    expect(screen.getByLabelText('Описание')).toBeInTheDocument();
+    expect(screen.getByLabelText('Формат')).toHaveValue('epub');
+    expect(screen.getByLabelText('Видимость')).toHaveValue('private');
+  });
+
+  it('отправляет FormData и после public upload обновляет библиотеку и каталог', async () => {
+    const uploadedBook = {
+      ...publicBook,
+      id: 'eb56e24a-6c4c-4dbf-903c-768df56e1ed4',
+      title: 'Загруженная публичная книга',
+      author: 'Новый автор',
+      description: 'Новое описание',
+      format: 'pdf',
+    };
+    const uploadedEntry = {
+      ...libraryItem,
+      id: 26,
+      book: uploadedBook,
+      reading_percentage: '0.00',
+    };
+    let booksReads = 0;
+    let libraryReads = 0;
+    let uploadOptions;
+    mockKnowledgeApi({
+      '/api/knowledge/books/': (options) => {
+        if (options.method === 'POST') {
+          uploadOptions = options;
+          return Promise.resolve(jsonResponse(uploadedBook, 201));
+        }
+        booksReads += 1;
+        const books = booksReads === 1
+          ? [publicBook]
+          : [uploadedBook, publicBook];
+        return Promise.resolve(jsonResponse(page(books)));
+      },
+      '/api/knowledge/library/': () => {
+        libraryReads += 1;
+        const entries = libraryReads === 1
+          ? [libraryItem]
+          : [uploadedEntry, libraryItem];
+        return Promise.resolve(jsonResponse(page(entries)));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Загрузить книгу' }));
+    const values = await fillUploadForm(browser, {
+      file: new File(['pdf-content'], 'book.pdf', { type: 'application/pdf' }),
+      format: 'pdf',
+      visibility: 'public',
+    });
+    expect(screen.getByLabelText('Файл').files).toHaveLength(1);
+    await browser.click(screen.getByRole('button', { name: 'Загрузить' }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
+    });
+    expect(screen.getAllByRole('heading', { name: uploadedBook.title })).toHaveLength(2);
+    expect(uploadOptions.body).toBeInstanceOf(FormData);
+    expect(uploadOptions.headers).not.toHaveProperty('Content-Type');
+    expect(uploadOptions.body.get('file')).toEqual(values.file);
+    expect(uploadOptions.body.get('title')).toBe(values.title);
+    expect(uploadOptions.body.get('author')).toBe(values.author);
+    expect(uploadOptions.body.get('description')).toBe(values.description);
+    expect(uploadOptions.body.get('format')).toBe('pdf');
+    expect(uploadOptions.body.get('visibility')).toBe('public');
+
+    await browser.click(screen.getByRole('button', { name: 'Загрузить книгу' }));
+    expect(screen.getByLabelText('Название')).toHaveValue('');
+    expect(screen.getByLabelText('Автор')).toHaveValue('');
+    expect(screen.getByLabelText('Описание')).toHaveValue('');
+    expect(screen.getByLabelText('Формат')).toHaveValue('epub');
+    expect(screen.getByLabelText('Видимость')).toHaveValue('private');
+    expect(screen.getByLabelText('Файл').files).toHaveLength(0);
+  });
+
+  it.each([
+    [400, { title: ['Название обязательно.'] }, 'Название обязательно.'],
+    [403, { detail: 'Профиль автора не найден.' }, 'Загрузка доступна только пользователям с профилем автора.'],
+    [500, { detail: 'Ошибка сервера.' }, 'Не удалось загрузить книгу. Проверьте соединение и попробуйте ещё раз.'],
+  ])('оставляет форму заполненной и показывает безопасную ошибку при %s', async (
+    responseStatus,
+    responseBody,
+    expectedError,
+  ) => {
+    mockKnowledgeApi({
+      '/api/knowledge/books/': (options) => {
+        if (options.method === 'POST') {
+          return Promise.resolve(jsonResponse(responseBody, responseStatus));
+        }
+        return Promise.resolve(jsonResponse(page([publicBook])));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Загрузить книгу' }));
+    const values = await fillUploadForm(browser);
+    await browser.click(screen.getByRole('button', { name: 'Загрузить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(expectedError);
+    expect(screen.getByRole('dialog', { name: 'Загрузить книгу' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Название')).toHaveValue(values.title);
+    expect(screen.getByLabelText('Автор')).toHaveValue(values.author);
+    expect(screen.getByLabelText('Описание')).toHaveValue(values.description);
+  });
+
+  it('блокирует повторный submit, пока upload не завершён', async () => {
+    const uploadResponse = deferred();
+    const uploadHandler = vi.fn((options) => {
+      if (options.method === 'POST') return uploadResponse.promise;
+      return Promise.resolve(jsonResponse(page([publicBook])));
+    });
+    mockKnowledgeApi({ '/api/knowledge/books/': uploadHandler });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Загрузить книгу' }));
+    await fillUploadForm(browser);
+    await browser.click(screen.getByRole('button', { name: 'Загрузить' }));
+
+    const pendingButton = screen.getByRole('button', { name: 'Загружаем…' });
+    expect(pendingButton).toBeDisabled();
+    await browser.click(pendingButton);
+    expect(uploadHandler.mock.calls.filter(([options]) => options?.method === 'POST')).toHaveLength(1);
+
+    uploadResponse.resolve(jsonResponse({ ...publicBook, visibility: 'private' }, 201));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
+    });
+  });
+
   it('считает отсутствие профиля нормальным состоянием читателя', async () => {
     mockKnowledgeApi({
       '/api/knowledge/profile/': () => Promise.resolve(
@@ -214,6 +453,7 @@ describe('KnowledgePage', () => {
     expect(await screen.findByRole('heading', { name: 'Профиль автора не создан' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
   });
 
   it('отличает серверную ошибку профиля от missing state', async () => {

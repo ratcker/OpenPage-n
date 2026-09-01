@@ -13,3 +13,24 @@ export function getKnowledgeLibrary() {
 export function getKnowledgeProfile() {
   return authorizedRequest(`${KNOWLEDGE_URL}/profile/`);
 }
+
+export function addBookToLibrary(bookId) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/library/${bookId}/`, {
+    method: 'POST',
+  });
+}
+
+export function uploadKnowledgeBook(data) {
+  const body = new FormData();
+  body.append('file', data.file);
+  body.append('title', data.title);
+  body.append('author', data.author);
+  body.append('description', data.description);
+  body.append('format', data.format);
+  body.append('visibility', data.visibility);
+
+  return authorizedRequest(`${KNOWLEDGE_URL}/books/`, {
+    method: 'POST',
+    body,
+  });
+}

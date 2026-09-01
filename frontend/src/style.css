@@ -777,6 +777,24 @@ a {
   line-height: 1.5;
 }
 
+.author-upload-button {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 14px;
+  border: 1px solid #68499b;
+  border-radius: 8px;
+  color: #e9e0fb;
+  background: #2a2037;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.author-upload-button:hover {
+  border-color: #8f68ca;
+  background: #332542;
+}
+
 .author-profile-loading .author-avatar,
 .book-card-loading .book-cover,
 .book-card-loading span,
@@ -901,6 +919,7 @@ a {
   font-size: 0.75rem;
   line-height: 1.45;
   -webkit-box-orient: vertical;
+  line-clamp: 2;
   -webkit-line-clamp: 2;
 }
 
@@ -920,6 +939,48 @@ a {
   color: #c9b6ef;
   font-size: 0.78rem;
   font-weight: 650;
+}
+
+.book-library-control {
+  margin-top: 14px;
+}
+
+.book-library-action {
+  width: 100%;
+  min-height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 8px 10px;
+  border: 1px solid #3d3449;
+  border-radius: 7px;
+  color: #c9b6ef;
+  background: #18141e;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.book-library-action:hover:not(:disabled) {
+  border-color: #7050a5;
+  color: var(--text);
+}
+
+.book-library-action:disabled {
+  color: #746d7b;
+  cursor: default;
+}
+
+.book-library-login {
+  margin-top: 14px;
+}
+
+.book-library-error {
+  margin: 8px 0 0;
+  color: #e8a9ad;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  text-transform: none;
 }
 
 .book-card-loading > div:last-child {
@@ -980,6 +1041,163 @@ a {
 
 .knowledge-login-link:hover {
   color: var(--text);
+}
+
+.book-upload-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 7, 11, 0.82);
+}
+
+.book-upload-dialog {
+  width: min(100%, 520px);
+  max-height: calc(100dvh - 48px);
+  padding: 30px;
+  overflow-y: auto;
+  border: 1px solid #3b3544;
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.book-upload-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.book-upload-heading h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 620;
+}
+
+.dialog-close {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0 0 2px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  color: var(--muted-text);
+  background: transparent;
+  cursor: pointer;
+  font-size: 1.25rem;
+  line-height: 1;
+}
+
+.dialog-close:hover:not(:disabled) {
+  color: var(--text);
+}
+
+.dialog-close:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.book-upload-form {
+  display: grid;
+  gap: 17px;
+  margin-top: 26px;
+}
+
+.book-upload-form label {
+  display: grid;
+  gap: 8px;
+  color: var(--soft-text);
+  font-size: 0.78rem;
+}
+
+.book-upload-form input,
+.book-upload-form textarea,
+.book-upload-form select {
+  width: 100%;
+  padding: 11px 13px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  outline: none;
+  color: var(--text);
+  background: #100e15;
+  font: inherit;
+  font-size: 0.85rem;
+}
+
+.book-upload-form textarea {
+  resize: vertical;
+}
+
+.book-upload-form input:focus,
+.book-upload-form textarea:focus,
+.book-upload-form select:focus {
+  border-color: var(--accent);
+}
+
+.book-upload-form input[type="file"] {
+  padding: 9px;
+  color: var(--muted-text);
+}
+
+.book-upload-form input[type="file"]::file-selector-button {
+  margin-right: 12px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--soft-text);
+  background: #2a2037;
+  cursor: pointer;
+}
+
+.book-upload-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.book-upload-error {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid #59383f;
+  border-radius: 7px;
+  color: #efb7bb;
+  background: #211419;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.book-upload-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.book-upload-actions > button {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 1px solid #3a3542;
+  border-radius: 8px;
+  color: var(--soft-text);
+  background: #18151d;
+  cursor: pointer;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.book-upload-actions > button:disabled {
+  cursor: default;
+  opacity: 0.65;
+}
+
+.book-upload-actions .primary-button {
+  border-color: #8050e7;
+  color: #fff;
+  background: var(--accent-dark);
 }
 
 .articles-catalog {
@@ -1295,6 +1513,25 @@ a {
 
   .article-card > svg {
     display: none;
+  }
+
+  .book-upload-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .book-upload-dialog {
+    max-height: calc(100dvh - 24px);
+    padding: 24px;
+  }
+
+  .book-upload-options,
+  .book-upload-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .book-upload-actions {
+    display: grid;
   }
 
   .footer-inner {

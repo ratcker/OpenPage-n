@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import {
+  addBookToLibrary,
   getKnowledgeBooks,
   getKnowledgeLibrary,
   getKnowledgeProfile,
@@ -9,6 +10,7 @@ import {
 import useAuth from '../../auth/useAuth.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
 import AuthorProfile from './AuthorProfile.jsx';
+import BookUploadDialog from './BookUploadDialog.jsx';
 
 const articleCards = ['Рабочие заметки', 'Полезная подборка', 'Новая идея'];
 
@@ -22,7 +24,7 @@ function formatProgress(value) {
   return Number.isFinite(progress) ? `${value}%` : '0%';
 }
 
-function BookCard({ book, readingPercentage }) {
+function BookCard({ book, readingPercentage, action }) {
   return (
     <article className="book-card">
       <div className="book-cover" aria-hidden="true">
@@ -39,8 +41,49 @@ function BookCard({ book, readingPercentage }) {
             <strong>{formatProgress(readingPercentage)}</strong>
           </div>
         )}
+        {action}
       </div>
     </article>
+  );
+}
+
+function CatalogBookAction({
+  book,
+  authStatus,
+  libraryState,
+  libraryBookIds,
+  addingBookId,
+  error,
+  onAdd,
+}) {
+  if (authStatus === 'anonymous') {
+    return (
+      <Link className="book-library-action book-library-login" to="/login" state={{ from: '/knowledge' }}>
+        Войти, чтобы добавить
+      </Link>
+    );
+  }
+
+  const isInLibrary = libraryBookIds.has(book.id);
+  const isAdding = addingBookId === book.id;
+  const isCheckingLibrary = libraryState.status === 'loading';
+
+  return (
+    <div className="book-library-control">
+      <button
+        className="book-library-action"
+        type="button"
+        disabled={isInLibrary || isCheckingLibrary || Boolean(addingBookId)}
+        onClick={() => onAdd(book.id)}
+      >
+        {isInLibrary && 'В библиотеке'}
+        {isAdding && 'Добавляем…'}
+        {!isInLibrary && !isAdding && 'Добавить в библиотеку'}
+      </button>
+      {error?.bookId === book.id && (
+        <p className="book-library-error" role="alert">{error.message}</p>
+      )}
+    </div>
   );
 }
 
@@ -72,6 +115,7 @@ function BookCollection({
   errorTitle,
   loadingLabel,
   library = false,
+  renderBookAction,
 }) {
   let content;
 
@@ -108,6 +152,7 @@ function BookCollection({
           const book = library ? item.book : item;
           return (
             <BookCard
+              action={renderBookAction?.(book)}
               book={book}
               key={library ? item.id : book.id}
               readingPercentage={library ? item.reading_percentage : undefined}
@@ -132,10 +177,20 @@ function BookCollection({
   );
 }
 
-function BooksView({ booksState, libraryState, profileState }) {
+function BooksView({
+  authStatus,
+  booksState,
+  libraryState,
+  profileState,
+  libraryBookIds,
+  addingBookId,
+  addError,
+  onAddBook,
+  onOpenUpload,
+}) {
   return (
     <div className="knowledge-library-layout">
-      <AuthorProfile state={profileState} />
+      <AuthorProfile state={profileState} onUpload={onOpenUpload} />
 
       <div className="knowledge-books-column">
         <BookCollection
@@ -161,6 +216,17 @@ function BooksView({ booksState, libraryState, profileState }) {
           emptyDescription="Каталог наполнится, когда появятся общедоступные книги."
           errorTitle="Не удалось загрузить каталог."
           loadingLabel="Загружаем публичные книги…"
+          renderBookAction={(book) => (
+            <CatalogBookAction
+              book={book}
+              authStatus={authStatus}
+              libraryState={libraryState}
+              libraryBookIds={libraryBookIds}
+              addingBookId={addingBookId}
+              error={addError}
+              onAdd={onAddBook}
+            />
+          )}
         />
       </div>
     </div>
@@ -203,6 +269,13 @@ export default function KnowledgePage() {
   const [booksState, setBooksState] = useState(initialCollectionState);
   const [libraryState, setLibraryState] = useState(initialCollectionState);
   const [profileState, setProfileState] = useState({ status: 'loading', profile: null });
+  const [addingBookId, setAddingBookId] = useState(null);
+  const [addError, setAddError] = useState(null);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+
+  const libraryBookIds = new Set(
+    libraryState.items.map((item) => item.book.id),
+  );
 
   useEffect(() => {
     if (authStatus === 'loading') return undefined;
@@ -253,6 +326,49 @@ export default function KnowledgePage() {
     };
   }, [authStatus]);
 
+  async function handleAddBook(bookId) {
+    if (addingBookId) return;
+
+    setAddingBookId(bookId);
+    setAddError(null);
+
+    try {
+      const entry = await addBookToLibrary(bookId);
+      setLibraryState((current) => {
+        const alreadyAdded = current.items.some((item) => item.book.id === bookId);
+        return {
+          status: 'success',
+          items: alreadyAdded ? current.items : [entry, ...current.items],
+        };
+      });
+    } catch {
+      setAddError({
+        bookId,
+        message: 'Не удалось добавить книгу. Попробуйте ещё раз.',
+      });
+    } finally {
+      setAddingBookId(null);
+    }
+  }
+
+  async function handleBookUploaded(book) {
+    const updates = [
+      getKnowledgeLibrary()
+        .then((data) => setLibraryState({ status: 'success', items: data.results }))
+        .catch(() => setLibraryState({ status: 'error', items: [] })),
+    ];
+
+    if (book.visibility === 'public') {
+      updates.push(
+        getKnowledgeBooks()
+          .then((data) => setBooksState({ status: 'success', items: data.results }))
+          .catch(() => setBooksState({ status: 'error', items: [] })),
+      );
+    }
+
+    await Promise.all(updates);
+  }
+
   return (
     <SiteLayout>
       <div className="knowledge-page">
@@ -288,15 +404,28 @@ export default function KnowledgePage() {
         <div className="container knowledge-content">
           {mode === 'books' ? (
             <BooksView
+              authStatus={authStatus}
               booksState={booksState}
               libraryState={libraryState}
               profileState={profileState}
+              libraryBookIds={libraryBookIds}
+              addingBookId={addingBookId}
+              addError={addError}
+              onAddBook={handleAddBook}
+              onOpenUpload={() => setIsUploadOpen(true)}
             />
           ) : (
             <ArticlesView />
           )}
         </div>
       </div>
+
+      {isUploadOpen && profileState.status === 'exists' && (
+        <BookUploadDialog
+          onClose={() => setIsUploadOpen(false)}
+          onUploaded={handleBookUploaded}
+        />
+      )}
     </SiteLayout>
   );
 }
