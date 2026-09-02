@@ -38,8 +38,14 @@ class DocumentationTests(SimpleTestCase):
                 "post": "knowledge_books_upload",
             },
             "/api/knowledge/books/{book_uuid}/": {"get": "knowledge_books_retrieve"},
+            "/api/knowledge/books/{book_uuid}/content/": {
+                "get": "knowledge_books_content_retrieve"
+            },
             "/api/knowledge/library/": {"get": "knowledge_library_list"},
             "/api/knowledge/library/{book_uuid}/": {"post": "knowledge_library_add"},
+            "/api/knowledge/library/{book_uuid}/progress/": {
+                "patch": "knowledge_library_progress_update"
+            },
             "/api/knowledge/profile/": {"get": "knowledge_profile_retrieve"},
         }
 
@@ -60,6 +66,7 @@ class DocumentationTests(SimpleTestCase):
             ("/api/knowledge/books/", "post"),
             ("/api/knowledge/library/", "get"),
             ("/api/knowledge/library/{book_uuid}/", "post"),
+            ("/api/knowledge/library/{book_uuid}/progress/", "patch"),
             ("/api/knowledge/profile/", "get"),
         }
 

@@ -103,6 +103,17 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Локальное хранилище файлов приложений
 MEDIA_ROOT = BASE_DIR / "media"
 
+# S3-compatible storage используется при заданном внутреннем endpoint.
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", "")
+S3_PUBLIC_ENDPOINT_URL = os.environ.get("S3_PUBLIC_ENDPOINT_URL", S3_ENDPOINT_URL)
+S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME", "")
+S3_ACCESS_KEY_ID = os.environ.get("S3_ACCESS_KEY_ID", "")
+S3_SECRET_ACCESS_KEY = os.environ.get("S3_SECRET_ACCESS_KEY", "")
+S3_REGION_NAME = os.environ.get("S3_REGION_NAME", "us-east-1")
+KNOWLEDGE_CONTENT_URL_TTL_SECONDS = int(
+    os.environ.get("KNOWLEDGE_CONTENT_URL_TTL_SECONDS", "300")
+)
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "accounts.User"

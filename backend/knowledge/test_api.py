@@ -2,6 +2,7 @@ import uuid
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import override_settings
@@ -14,6 +15,19 @@ from accounts.models import User
 
 from .models import Book, KnowledgeProfile, UserLibraryBook
 from .storage import LocalKnowledgeStorage, book_storage_key
+
+
+class StubContentStorage:
+    def __init__(self, url="https://storage.example.test/book", error=None):
+        self.url = url
+        self.error = error
+        self.calls = []
+
+    def get_presigned_url(self, key, expires_in):
+        self.calls.append((key, expires_in))
+        if self.error:
+            raise self.error
+        return self.url
 
 
 class KnowledgeAPITestCase(APITestCase):
@@ -304,6 +318,95 @@ class AnonymousKnowledgeAPITests(KnowledgeAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
 
+class BookContentAPITests(KnowledgeAPITestCase):
+    def content_url(self, book):
+        return reverse("knowledge_book_content", kwargs={"book_uuid": book.id})
+
+    def get_content(self, book, storage=None):
+        storage = storage or StubContentStorage()
+        with patch("knowledge.views.get_knowledge_storage", return_value=storage):
+            response = self.client.get(self.content_url(book))
+        return response, storage
+
+    def test_anonymous_can_get_public_book_content(self):
+        book = self.create_model_book()
+
+        response, storage = self.get_content(book)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["url"], storage.url)
+        self.assertEqual(response.data["expires_in"], 300)
+        self.assertNotIn("storage_key", response.data)
+        self.assertEqual(storage.calls, [(book.storage_key, 300)])
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_authenticated_public_access_adds_book_once(self):
+        book = self.create_model_book()
+        self.authenticate()
+
+        first_response, _ = self.get_content(book)
+        second_response, _ = self.get_content(book)
+
+        self.assertEqual(first_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(second_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            UserLibraryBook.objects.filter(user=self.user, book=book).count(),
+            1,
+        )
+
+    def test_anonymous_cannot_get_private_book_content(self):
+        book = self.create_model_book(visibility=Book.Visibility.PRIVATE)
+
+        response, storage = self.get_content(book)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(storage.calls, [])
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_uploader_can_get_private_book_content(self):
+        book = self.create_model_book(
+            uploaded_by=self.user,
+            visibility=Book.Visibility.PRIVATE,
+        )
+        self.authenticate()
+
+        response, _ = self.get_content(book)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            UserLibraryBook.objects.filter(user=self.user, book=book).exists()
+        )
+
+    def test_foreign_user_cannot_get_private_book_content(self):
+        book = self.create_model_book(visibility=Book.Visibility.PRIVATE)
+        self.authenticate()
+
+        response, storage = self.get_content(book)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(storage.calls, [])
+        self.assertFalse(
+            UserLibraryBook.objects.filter(user=self.user, book=book).exists()
+        )
+
+    def test_presign_failure_returns_safe_error_without_library_entry(self):
+        book = self.create_model_book()
+        self.authenticate()
+        storage = StubContentStorage(error=RuntimeError("internal storage details"))
+
+        response, _ = self.get_content(book, storage)
+
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+        )
+        self.assertEqual(response.data["detail"], "Не удалось подготовить файл книги.")
+        self.assertNotContains(response, "internal storage details", status_code=500)
+        self.assertFalse(
+            UserLibraryBook.objects.filter(user=self.user, book=book).exists()
+        )
+
+
 class KnowledgeAPIAuthenticationTests(KnowledgeAPITestCase):
     def test_upload_library_and_profile_still_require_authentication(self):
         book = self.create_model_book()
@@ -421,6 +524,199 @@ class LibraryAPITests(KnowledgeAPITestCase):
         self.assertFalse(
             UserLibraryBook.objects.filter(user=self.user, book=book).exists()
         )
+
+
+class LibraryProgressAPITests(KnowledgeAPITestCase):
+    def progress_url(self, book):
+        return reverse("knowledge_library_progress", kwargs={"book_uuid": book.id})
+
+    def progress_data(self, **changes):
+        data = {
+            "reading_location": {"type": "epub", "location": "epubcfi(/6/4)"},
+            "reading_percentage": 42.15,
+        }
+        data.update(changes)
+        return data
+
+    def test_anonymous_progress_update_is_rejected(self):
+        book = self.create_model_book()
+
+        response = self.client.patch(
+            self.progress_url(book),
+            self.progress_data(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_public_progress_creates_relation_and_saves_values(self):
+        book = self.create_model_book()
+        self.authenticate()
+
+        response = self.client.patch(
+            self.progress_url(book),
+            self.progress_data(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry = UserLibraryBook.objects.get(user=self.user, book=book)
+        self.assertEqual(
+            entry.reading_location,
+            {"type": "epub", "location": "epubcfi(/6/4)"},
+        )
+        self.assertEqual(entry.reading_percentage, Decimal("42.15"))
+        self.assertEqual(response.data["id"], entry.id)
+        self.assertEqual(response.data["reading_percentage"], "42.15")
+
+    def test_zero_and_one_hundred_percent_are_valid(self):
+        book = self.create_model_book()
+        self.authenticate()
+
+        for percentage in (0, 100):
+            with self.subTest(percentage=percentage):
+                response = self.client.patch(
+                    self.progress_url(book),
+                    self.progress_data(reading_percentage=percentage),
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        entry = UserLibraryBook.objects.get(user=self.user, book=book)
+        self.assertEqual(entry.reading_percentage, Decimal("100.00"))
+
+    def test_percentage_outside_range_is_rejected(self):
+        book = self.create_model_book()
+        self.authenticate()
+
+        for percentage in (-0.01, 100.01):
+            with self.subTest(percentage=percentage):
+                response = self.client.patch(
+                    self.progress_url(book),
+                    self.progress_data(reading_percentage=percentage),
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_reading_location_must_be_an_object(self):
+        book = self.create_model_book()
+        self.authenticate()
+
+        response = self.client.patch(
+            self.progress_url(book),
+            self.progress_data(reading_location=["chapter-1"]),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_pdf_page_must_be_positive_integer(self):
+        book = self.create_model_book(format=Book.Format.PDF)
+        self.authenticate()
+
+        for page in (0, -1, 1.5, True):
+            with self.subTest(page=page):
+                response = self.client.patch(
+                    self.progress_url(book),
+                    self.progress_data(reading_location={"type": "pdf", "page": page}),
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_location_type_must_match_book_format(self):
+        book = self.create_model_book(format=Book.Format.PDF)
+        self.authenticate()
+
+        for location_type in ("epub", "text"):
+            with self.subTest(location_type=location_type):
+                response = self.client.patch(
+                    self.progress_url(book),
+                    self.progress_data(
+                        reading_location={"type": location_type, "page": 1}
+                    ),
+                    format="json",
+                )
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_foreign_private_progress_is_forbidden_without_relation(self):
+        book = self.create_model_book(visibility=Book.Visibility.PRIVATE)
+        self.authenticate()
+
+        response = self.client.patch(
+            self.progress_url(book),
+            self.progress_data(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(
+            UserLibraryBook.objects.filter(user=self.user, book=book).exists()
+        )
+
+    def test_existing_relation_does_not_bypass_private_access(self):
+        book = self.create_model_book(visibility=Book.Visibility.PRIVATE)
+        UserLibraryBook.objects.create(user=self.user, book=book)
+        self.authenticate()
+
+        response = self.client.patch(
+            self.progress_url(book),
+            self.progress_data(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_owner_can_save_private_book_progress(self):
+        book = self.create_model_book(
+            uploaded_by=self.user,
+            visibility=Book.Visibility.PRIVATE,
+        )
+        self.authenticate()
+
+        response = self.client.patch(
+            self.progress_url(book),
+            self.progress_data(),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            UserLibraryBook.objects.filter(user=self.user, book=book).exists()
+        )
+
+    def test_repeated_patch_uses_last_write(self):
+        book = self.create_model_book()
+        self.authenticate()
+
+        self.client.patch(
+            self.progress_url(book),
+            self.progress_data(),
+            format="json",
+        )
+        response = self.client.patch(
+            self.progress_url(book),
+            self.progress_data(
+                reading_location={"type": "epub", "location": "epubcfi(/8/2)"},
+                reading_percentage=84.5,
+            ),
+            format="json",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        entry = UserLibraryBook.objects.get(user=self.user, book=book)
+        self.assertEqual(
+            entry.reading_location,
+            {"type": "epub", "location": "epubcfi(/8/2)"},
+        )
+        self.assertEqual(entry.reading_percentage, Decimal("84.50"))
 
 
 class KnowledgeProfileAPITests(KnowledgeAPITestCase):

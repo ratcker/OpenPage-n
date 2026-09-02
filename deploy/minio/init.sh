@@ -11,6 +11,14 @@ mc alias set local \
 
 mc mb --ignore-existing "local/$S3_BUCKET_NAME"
 
+# MinIO Community configures CORS for the whole S3 API, not per bucket.
+# Its built-in handler allows GET, HEAD and Range and exposes S3 response headers.
+# Browsers send https://опенпейч.рф using this ASCII hostname.
+mc admin config set \
+    local \
+    api \
+    cors_allow_origin="https://xn--e1aamodgc0e.xn--p1ai"
+
 cat > /tmp/openpage-backend-policy.json <<EOF
 {
   "Version": "2012-10-17",

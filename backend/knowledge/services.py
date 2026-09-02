@@ -4,7 +4,7 @@ from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from .models import Book, UserLibraryBook
-from .storage import LocalKnowledgeStorage, book_storage_key
+from .storage import book_storage_key, get_knowledge_storage
 
 
 # Создание книги остаётся одной явной доменной операцией.
@@ -23,7 +23,7 @@ def create_book(
         raise ValidationError({"format": "Неподдерживаемый формат книги."})
 
     if storage is None:
-        storage = LocalKnowledgeStorage()
+        storage = get_knowledge_storage()
 
     book_id = uuid.uuid4()
     storage_key = book_storage_key(book_id, format)

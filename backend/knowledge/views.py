@@ -1,23 +1,28 @@
+from django.conf import settings
+from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.generics import GenericAPIView
-from rest_framework.parsers import MultiPartParser
+from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from .models import Book, KnowledgeProfile, UserLibraryBook
 from .pagination import KnowledgePagination
 from .serializers import (
+    BookContentSerializer,
     BookSerializer,
     BookUploadSerializer,
     KnowledgeDetailResponseSerializer,
     KnowledgeProfileSerializer,
+    ReadingProgressSerializer,
     UserLibraryBookSerializer,
 )
 from .services import create_book
+from .storage import get_knowledge_storage
 
 KNOWLEDGE_TAG = "База знаний"
 VALIDATION_ERROR_SCHEMA = {
@@ -33,6 +38,10 @@ VALIDATION_ERROR_SCHEMA = {
 
 def _can_access_book(user, book):
     return book.visibility == Book.Visibility.PUBLIC or book.uploaded_by_id == user.id
+
+
+def _get_or_add_library_book(user, book):
+    return UserLibraryBook.objects.get_or_create(user=user, book=book)
 
 
 class BookListView(GenericAPIView):
@@ -169,6 +178,56 @@ class BookDetailView(GenericAPIView):
         return Response(BookSerializer(book).data)
 
 
+class BookContentView(GenericAPIView):
+    permission_classes = (AllowAny,)
+    serializer_class = BookContentSerializer
+
+    @extend_schema(
+        operation_id="knowledge_books_content_retrieve",
+        summary="Получить временный URL книги",
+        description=(
+            "Возвращает короткоживущий signed URL файла. Публичная книга доступна "
+            "анонимно; приватная — только загрузившему её пользователю. При успешном "
+            "доступе авторизованного пользователя книга появляется в его библиотеке."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        auth=[],
+        responses={
+            200: BookContentSerializer,
+            403: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Чужая приватная книга.",
+            ),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Книга не найдена.",
+            ),
+            500: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Не удалось подготовить временный URL.",
+            ),
+        },
+    )
+    def get(self, request, book_uuid):
+        book = get_object_or_404(Book, id=book_uuid)
+        if not _can_access_book(request.user, book):
+            raise PermissionDenied("Эта приватная книга вам недоступна.")
+
+        expires_in = settings.KNOWLEDGE_CONTENT_URL_TTL_SECONDS
+        try:
+            url = get_knowledge_storage().get_presigned_url(
+                book.storage_key,
+                expires_in,
+            )
+        except Exception as error:
+            raise APIException("Не удалось подготовить файл книги.") from error
+
+        if request.user.is_authenticated:
+            _get_or_add_library_book(request.user, book)
+
+        return Response({"url": url, "expires_in": expires_in})
+
+
 class LibraryListView(GenericAPIView):
     permission_classes = (IsAuthenticated,)
     pagination_class = KnowledgePagination
@@ -240,15 +299,73 @@ class LibraryAddView(GenericAPIView):
         if not _can_access_book(request.user, book):
             raise PermissionDenied("Эту приватную книгу нельзя добавить.")
 
-        entry, created = UserLibraryBook.objects.get_or_create(
-            user=request.user,
-            book=book,
-        )
+        entry, created = _get_or_add_library_book(request.user, book)
         response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(
             UserLibraryBookSerializer(entry).data,
             status=response_status,
         )
+
+
+class LibraryProgressView(GenericAPIView):
+    permission_classes = (IsAuthenticated,)
+    parser_classes = (JSONParser,)
+    serializer_class = ReadingProgressSerializer
+
+    @extend_schema(
+        operation_id="knowledge_library_progress_update",
+        summary="Сохранить позицию чтения",
+        description=(
+            "Сохраняет последнюю позицию и процент чтения для текущего пользователя. "
+            "Для доступной книги отсутствующая связь с библиотекой создаётся автоматически; "
+            "последняя запись полностью заменяет предыдущий progress."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        request=ReadingProgressSerializer,
+        responses={
+            200: UserLibraryBookSerializer,
+            400: OpenApiResponse(
+                response=VALIDATION_ERROR_SCHEMA,
+                description="Progress не прошёл валидацию.",
+            ),
+            401: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Access-токен отсутствует или недействителен.",
+            ),
+            403: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Чужая приватная книга.",
+            ),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Книга не найдена.",
+            ),
+        },
+    )
+    def patch(self, request, book_uuid):
+        book = get_object_or_404(Book, id=book_uuid)
+        if not _can_access_book(request.user, book):
+            raise PermissionDenied("Эта приватная книга вам недоступна.")
+
+        serializer = ReadingProgressSerializer(
+            data=request.data,
+            context={"book": book},
+        )
+        serializer.is_valid(raise_exception=True)
+
+        with transaction.atomic():
+            entry, _ = _get_or_add_library_book(request.user, book)
+            entry.reading_location = serializer.validated_data["reading_location"]
+            entry.reading_percentage = serializer.validated_data["reading_percentage"]
+            entry.save(
+                update_fields=(
+                    "reading_location",
+                    "reading_percentage",
+                    "updated_at",
+                )
+            )
+
+        return Response(UserLibraryBookSerializer(entry).data)
 
 
 class KnowledgeProfileView(GenericAPIView):
