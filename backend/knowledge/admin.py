@@ -17,14 +17,22 @@ class BookAdmin(admin.ModelAdmin):
     list_display = (
         "title",
         "author",
+        "language",
+        "year",
         "format",
         "visibility",
         "status",
         "uploaded_by",
         "created_at",
     )
-    list_filter = ("format", "visibility", "status")
-    search_fields = ("title", "author", "storage_key", "uploaded_by__email")
+    list_filter = ("format", "visibility", "status", "language")
+    search_fields = (
+        "title",
+        "author",
+        "publisher",
+        "storage_key",
+        "uploaded_by__email",
+    )
     readonly_fields = ("id", "created_at", "updated_at")
     raw_id_fields = ("uploaded_by",)
     ordering = ("-created_at",)

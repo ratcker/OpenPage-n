@@ -37,7 +37,11 @@ class DocumentationTests(SimpleTestCase):
                 "get": "knowledge_books_list",
                 "post": "knowledge_books_upload",
             },
-            "/api/knowledge/books/{book_uuid}/": {"get": "knowledge_books_retrieve"},
+            "/api/knowledge/books/preview/": {"post": "knowledge_books_preview"},
+            "/api/knowledge/books/{book_uuid}/": {
+                "get": "knowledge_books_retrieve",
+                "patch": "knowledge_books_metadata_update",
+            },
             "/api/knowledge/books/{book_uuid}/content/": {
                 "get": "knowledge_books_content_retrieve"
             },
@@ -64,6 +68,8 @@ class DocumentationTests(SimpleTestCase):
         protected_operations = {
             ("/api/auth/me/", "get"),
             ("/api/knowledge/books/", "post"),
+            ("/api/knowledge/books/preview/", "post"),
+            ("/api/knowledge/books/{book_uuid}/", "patch"),
             ("/api/knowledge/library/", "get"),
             ("/api/knowledge/library/{book_uuid}/", "post"),
             ("/api/knowledge/library/{book_uuid}/progress/", "patch"),

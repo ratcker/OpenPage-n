@@ -1,27 +1,33 @@
+import base64
+
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
-from rest_framework.exceptions import APIException, PermissionDenied
+from rest_framework.exceptions import APIException, PermissionDenied, ValidationError
 from rest_framework.generics import GenericAPIView
 from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from .epub import InvalidEpubError, extract_epub_metadata
 from .models import Book, KnowledgeProfile, UserLibraryBook
 from .pagination import KnowledgePagination
 from .serializers import (
     BookContentSerializer,
     BookSerializer,
+    BookUpdateSerializer,
     BookUploadSerializer,
+    EpubPreviewSerializer,
+    EpubPreviewUploadSerializer,
     KnowledgeDetailResponseSerializer,
     KnowledgeProfileSerializer,
     ReadingProgressSerializer,
     UserLibraryBookSerializer,
 )
-from .services import create_book
+from .services import create_book, update_book_metadata
 from .storage import get_knowledge_storage
 
 KNOWLEDGE_TAG = "База знаний"
@@ -75,8 +81,10 @@ class BookListView(GenericAPIView):
         operation_id="knowledge_books_upload",
         summary="Загрузить книгу",
         description=(
-            "Создаёт книгу из multipart-файла и добавляет её в библиотеку "
-            "текущего пользователя. Требуется профиль автора материалов."
+            "Создаёт книгу из multipart-файла и добавляет её в библиотеку текущего "
+            "пользователя. Принимает optional metadata и обложку; для EPUB без "
+            "ручной обложки пытается сохранить обложку из файла. Требуется профиль "
+            "автора материалов."
         ),
         tags=[KNOWLEDGE_TAG],
         request=BookUploadSerializer,
@@ -134,21 +142,34 @@ class BookListView(GenericAPIView):
         serializer = BookUploadSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
-        book = create_book(
-            user=request.user,
-            content=data["file"],
-            title=data["title"],
-            author=data["author"],
-            description=data["description"],
-            format=data["format"],
-            visibility=data["visibility"],
-        )
+        try:
+            book = create_book(
+                user=request.user,
+                content=data["file"],
+                title=data["title"],
+                author=data["author"],
+                description=data["description"],
+                format=data["format"],
+                visibility=data["visibility"],
+                language=data.get("language", ""),
+                year=data.get("year"),
+                publisher=data.get("publisher", ""),
+                cover=data.get("cover"),
+            )
+        except Exception as error:
+            raise APIException("Не удалось сохранить книгу.") from error
         return Response(BookSerializer(book).data, status=status.HTTP_201_CREATED)
 
 
 class BookDetailView(GenericAPIView):
-    permission_classes = (AllowAny,)
+    permission_classes = (IsAuthenticated,)
+    parser_classes = (MultiPartParser,)
     serializer_class = BookSerializer
+
+    def get_permissions(self):
+        if self.request.method == "GET":
+            return (AllowAny(),)
+        return super().get_permissions()
 
     @extend_schema(
         operation_id="knowledge_books_retrieve",
@@ -176,6 +197,106 @@ class BookDetailView(GenericAPIView):
         if not _can_access_book(request.user, book):
             raise PermissionDenied("Эта приватная книга вам недоступна.")
         return Response(BookSerializer(book).data)
+
+    @extend_schema(
+        operation_id="knowledge_books_metadata_update",
+        summary="Изменить metadata книги",
+        description=(
+            "Позволяет загрузившему книгу пользователю изменить metadata и заменить "
+            "обложку. Формат, видимость, исходный файл и системные поля неизменяемы."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        request=BookUpdateSerializer,
+        responses={
+            200: BookSerializer,
+            400: OpenApiResponse(
+                response=VALIDATION_ERROR_SCHEMA,
+                description="Metadata или обложка не прошли валидацию.",
+            ),
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            403: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Изменять книгу может только загрузивший её пользователь.",
+            ),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Книга не найдена.",
+            ),
+        },
+    )
+    def patch(self, request, book_uuid):
+        book = get_object_or_404(Book, id=book_uuid)
+        if book.uploaded_by_id != request.user.id:
+            raise PermissionDenied("Изменять книгу может только её владелец.")
+
+        serializer = BookUpdateSerializer(data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        storage = get_knowledge_storage()
+        try:
+            book = update_book_metadata(
+                book=book,
+                data=serializer.validated_data,
+                storage=storage,
+            )
+        except Exception as error:
+            raise APIException("Не удалось обновить metadata книги.") from error
+        return Response(
+            BookSerializer(book, context={"knowledge_storage": storage}).data
+        )
+
+
+class EpubPreviewView(GenericAPIView):
+    permission_classes = (IsAuthenticated,)
+    parser_classes = (MultiPartParser,)
+    serializer_class = EpubPreviewUploadSerializer
+
+    @extend_schema(
+        operation_id="knowledge_books_preview",
+        summary="Получить preview metadata EPUB",
+        description=(
+            "Извлекает основные metadata и обложку из EPUB без создания книги "
+            "и без постоянного сохранения файла. Требуется профиль автора."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        request=EpubPreviewUploadSerializer,
+        responses={
+            200: EpubPreviewSerializer,
+            400: OpenApiResponse(
+                response=VALIDATION_ERROR_SCHEMA,
+                description="Файл не является корректным EPUB.",
+            ),
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            403: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="У пользователя нет KnowledgeProfile.",
+            ),
+        },
+    )
+    def post(self, request):
+        if not KnowledgeProfile.objects.filter(user=request.user).exists():
+            raise PermissionDenied("Для preview нужен профиль автора.")
+
+        serializer = EpubPreviewUploadSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            preview = extract_epub_metadata(serializer.validated_data["file"])
+        except InvalidEpubError as error:
+            raise ValidationError({"file": str(error)}) from error
+
+        cover = None
+        if preview.cover:
+            encoded = base64.b64encode(preview.cover).decode("ascii")
+            cover = f"data:{preview.cover_media_type};base64,{encoded}"
+        return Response(
+            {
+                "title": preview.title,
+                "author": preview.author,
+                "language": preview.language,
+                "publisher": preview.publisher,
+                "year": preview.year,
+                "cover": cover,
+            }
+        )
 
 
 class BookContentView(GenericAPIView):

@@ -1,8 +1,13 @@
 import uuid
+from datetime import date
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
+
+
+def max_publication_year():
+    return date.today().year + 1
 
 
 # Профиль пользователя внутри Базы знаний
@@ -47,6 +52,13 @@ class Book(models.Model):
     title = models.CharField(max_length=255)
     author = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    language = models.CharField(max_length=16, blank=True)
+    year = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MaxValueValidator(max_publication_year)],
+    )
+    publisher = models.CharField(max_length=255, blank=True)
     format = models.CharField(max_length=4, choices=Format.choices)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -64,6 +76,7 @@ class Book(models.Model):
         default=Status.PROCESSING,
     )
     storage_key = models.CharField(max_length=500, unique=True)
+    cover_key = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

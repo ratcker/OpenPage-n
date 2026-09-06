@@ -4,6 +4,7 @@ from .views import (
     BookContentView,
     BookDetailView,
     BookListView,
+    EpubPreviewView,
     KnowledgeProfileView,
     LibraryAddView,
     LibraryListView,
@@ -12,6 +13,11 @@ from .views import (
 
 urlpatterns = [
     path("books/", BookListView.as_view(), name="knowledge_books"),
+    path(
+        "books/preview/",
+        EpubPreviewView.as_view(),
+        name="knowledge_books_preview",
+    ),
     path(
         "books/<uuid:book_uuid>/",
         BookDetailView.as_view(),

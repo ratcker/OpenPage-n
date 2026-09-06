@@ -1,5 +1,5 @@
 from pathlib import PurePosixPath
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import boto3
 from botocore.config import Config
@@ -21,6 +21,28 @@ def book_storage_key(book_id, book_format):
         raise ValueError("Book format must be epub or pdf.")
 
     return f"books/{normalized_id}/original.{book_format}"
+
+
+def book_cover_storage_key(book_id, media_type, cover_id=None):
+    """Строит новый ключ обложки, не перезаписывая предыдущий объект."""
+    try:
+        normalized_id = UUID(str(book_id))
+        normalized_cover_id = UUID(str(cover_id)) if cover_id else uuid4()
+    except (TypeError, ValueError, AttributeError) as error:
+        raise ValueError("Book and cover ids must be valid UUIDs.") from error
+
+    extensions = {
+        "image/gif": "gif",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    try:
+        extension = extensions[media_type]
+    except KeyError as error:
+        raise ValueError("Unsupported cover image type.") from error
+
+    return f"books/{normalized_id}/covers/{normalized_cover_id}.{extension}"
 
 
 def _validate_key(key):
