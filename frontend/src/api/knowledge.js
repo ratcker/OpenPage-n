@@ -14,6 +14,26 @@ export function getKnowledgeProfile() {
   return authorizedRequest(`${KNOWLEDGE_URL}/profile/`);
 }
 
+function readerRequest(path, authenticated) {
+  return authenticated ? authorizedRequest(path) : request(path);
+}
+
+export function getKnowledgeBook(bookId, authenticated = false) {
+  return readerRequest(`${KNOWLEDGE_URL}/books/${bookId}/`, authenticated);
+}
+
+export function getKnowledgeBookContent(bookId, authenticated = false) {
+  return readerRequest(`${KNOWLEDGE_URL}/books/${bookId}/content/`, authenticated);
+}
+
+export function updateKnowledgeProgress(bookId, data) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/library/${bookId}/progress/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
 export function addBookToLibrary(bookId) {
   return authorizedRequest(`${KNOWLEDGE_URL}/library/${bookId}/`, {
     method: 'POST',

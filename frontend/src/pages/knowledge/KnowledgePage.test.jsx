@@ -148,6 +148,11 @@ describe('KnowledgePage', () => {
     expect(screen.getByRole('button', { name: 'Добавить в библиотеку' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Редактировать профиль' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Загрузить книгу' })).toBeInTheDocument();
+    expect(screen.getAllByRole('link', { name: 'Читать' })).toHaveLength(2);
+    expect(screen.getAllByRole('link', { name: 'Читать' })[0]).toHaveAttribute(
+      'href',
+      `/knowledge/books/${libraryBook.id}/read`,
+    );
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/knowledge/books/',
@@ -180,6 +185,10 @@ describe('KnowledgePage', () => {
     })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Войти' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Войти, чтобы добавить' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Читать' })).toHaveAttribute(
+      'href',
+      `/knowledge/books/${publicBook.id}/read`,
+    );
     expect(screen.getByRole('button', { name: 'Создать профиль автора' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Добавить в библиотеку' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Загрузить книгу' })).not.toBeInTheDocument();

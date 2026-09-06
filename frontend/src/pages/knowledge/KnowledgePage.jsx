@@ -41,7 +41,12 @@ function BookCard({ book, readingPercentage, action }) {
             <strong>{formatProgress(readingPercentage)}</strong>
           </div>
         )}
-        {action}
+        <div className="book-card-actions">
+          <Link className="book-read-action" to={`/knowledge/books/${book.id}/read`}>
+            Читать
+          </Link>
+          {action}
+        </div>
       </div>
     </article>
   );

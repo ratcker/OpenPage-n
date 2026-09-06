@@ -13,6 +13,10 @@ import {
   mockUser as user,
 } from './test/testData.js';
 
+vi.mock('./pages/knowledge/ReaderPage.jsx', () => ({
+  default: () => <main><h1>Публичная читалка</h1></main>,
+}));
+
 // Маленький маршрутизатор fetch держит сетевые сценарии тестов короткими.
 function mockApi(handlers) {
   const fetchMock = vi.fn((url, options) => {
@@ -197,6 +201,17 @@ describe('авторизация и маршруты', () => {
     expect(requestedPaths).toContain('/api/knowledge/books/');
     expect(requestedPaths).not.toContain('/api/knowledge/library/');
     expect(requestedPaths).not.toContain('/api/knowledge/profile/');
+  });
+
+  it('оставляет reader route доступным анонимному пользователю', async () => {
+    mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+    });
+
+    renderApp('/knowledge/books/7da55fa2-b522-4c4c-95fe-18d1c8111480/read');
+
+    expect(await screen.findByRole('heading', { name: 'Публичная читалка' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
   });
 
   it('автоматически входит после подтверждения email', async () => {
