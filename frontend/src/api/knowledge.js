@@ -40,6 +40,16 @@ export function addBookToLibrary(bookId) {
   });
 }
 
+export function previewKnowledgeBook(file) {
+  const body = new FormData();
+  body.append('file', file);
+
+  return authorizedRequest(`${KNOWLEDGE_URL}/books/preview/`, {
+    method: 'POST',
+    body,
+  });
+}
+
 export function uploadKnowledgeBook(data) {
   const body = new FormData();
   body.append('file', data.file);
@@ -48,9 +58,35 @@ export function uploadKnowledgeBook(data) {
   body.append('description', data.description);
   body.append('format', data.format);
   body.append('visibility', data.visibility);
+  for (const field of ['language', 'year', 'publisher']) {
+    if (data[field] !== '' && data[field] !== null && data[field] !== undefined) {
+      body.append(field, data[field]);
+    }
+  }
+  if (data.cover) body.append('cover', data.cover);
 
   return authorizedRequest(`${KNOWLEDGE_URL}/books/`, {
     method: 'POST',
+    body,
+  });
+}
+
+export function updateKnowledgeBook(bookId, data) {
+  const body = new FormData();
+  for (const field of [
+    'title',
+    'author',
+    'description',
+    'language',
+    'year',
+    'publisher',
+  ]) {
+    if (Object.hasOwn(data, field)) body.append(field, data[field] ?? '');
+  }
+  if (data.cover) body.append('cover', data.cover);
+
+  return authorizedRequest(`${KNOWLEDGE_URL}/books/${bookId}/`, {
+    method: 'PATCH',
     body,
   });
 }

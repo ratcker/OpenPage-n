@@ -40,6 +40,7 @@ class OptionalMetadataSerializer(serializers.Serializer):
 # Публичные metadata книги без данных загрузившего пользователя и storage.
 class BookSerializer(serializers.ModelSerializer):
     cover_url = serializers.SerializerMethodField()
+    can_edit = serializers.SerializerMethodField()
 
     def get_cover_url(self, book) -> str | None:
         if not book.cover_key:
@@ -52,6 +53,11 @@ class BookSerializer(serializers.ModelSerializer):
             settings.KNOWLEDGE_CONTENT_URL_TTL_SECONDS,
         )
 
+    def get_can_edit(self, book) -> bool:
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        return bool(user and user.is_authenticated and book.uploaded_by_id == user.id)
+
     class Meta:
         model = Book
         fields = (
@@ -63,6 +69,7 @@ class BookSerializer(serializers.ModelSerializer):
             "year",
             "publisher",
             "cover_url",
+            "can_edit",
             "format",
             "visibility",
             "status",

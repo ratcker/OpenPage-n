@@ -74,7 +74,7 @@ class BookListView(GenericAPIView):
             visibility=Book.Visibility.PUBLIC,
         ).order_by("-created_at", "-id")
         page = self.paginate_queryset(books)
-        serializer = BookSerializer(page, many=True)
+        serializer = BookSerializer(page, many=True, context={"request": request})
         return self.get_paginated_response(serializer.data)
 
     @extend_schema(
@@ -158,7 +158,10 @@ class BookListView(GenericAPIView):
             )
         except Exception as error:
             raise APIException("Не удалось сохранить книгу.") from error
-        return Response(BookSerializer(book).data, status=status.HTTP_201_CREATED)
+        return Response(
+            BookSerializer(book, context={"request": request}).data,
+            status=status.HTTP_201_CREATED,
+        )
 
 
 class BookDetailView(GenericAPIView):
@@ -196,7 +199,7 @@ class BookDetailView(GenericAPIView):
         book = get_object_or_404(Book, id=book_uuid)
         if not _can_access_book(request.user, book):
             raise PermissionDenied("Эта приватная книга вам недоступна.")
-        return Response(BookSerializer(book).data)
+        return Response(BookSerializer(book, context={"request": request}).data)
 
     @extend_schema(
         operation_id="knowledge_books_metadata_update",
@@ -241,7 +244,10 @@ class BookDetailView(GenericAPIView):
         except Exception as error:
             raise APIException("Не удалось обновить metadata книги.") from error
         return Response(
-            BookSerializer(book, context={"knowledge_storage": storage}).data
+            BookSerializer(
+                book,
+                context={"request": request, "knowledge_storage": storage},
+            ).data
         )
 
 
@@ -378,7 +384,11 @@ class LibraryListView(GenericAPIView):
             .order_by("-added_at", "-id")
         )
         page = self.paginate_queryset(entries)
-        serializer = UserLibraryBookSerializer(page, many=True)
+        serializer = UserLibraryBookSerializer(
+            page,
+            many=True,
+            context={"request": request},
+        )
         return self.get_paginated_response(serializer.data)
 
 
@@ -423,7 +433,7 @@ class LibraryAddView(GenericAPIView):
         entry, created = _get_or_add_library_book(request.user, book)
         response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
         return Response(
-            UserLibraryBookSerializer(entry).data,
+            UserLibraryBookSerializer(entry, context={"request": request}).data,
             status=response_status,
         )
 
@@ -486,7 +496,9 @@ class LibraryProgressView(GenericAPIView):
                 )
             )
 
-        return Response(UserLibraryBookSerializer(entry).data)
+        return Response(
+            UserLibraryBookSerializer(entry, context={"request": request}).data
+        )
 
 
 class KnowledgeProfileView(GenericAPIView):

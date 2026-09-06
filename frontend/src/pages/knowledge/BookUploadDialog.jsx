@@ -1,12 +1,20 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
-import { uploadKnowledgeBook } from '../../api/knowledge.js';
+import {
+  previewKnowledgeBook,
+  uploadKnowledgeBook,
+} from '../../api/knowledge.js';
+import BookMetadataFields, { useImagePreview } from './BookMetadataFields.jsx';
 
 const initialForm = {
   file: null,
   title: '',
   author: '',
   description: '',
+  language: '',
+  year: '',
+  publisher: '',
+  cover: null,
   format: 'epub',
   visibility: 'private',
 };
@@ -22,10 +30,65 @@ function uploadErrorMessage(error) {
 export default function BookUploadDialog({ onClose, onUploaded }) {
   const [form, setForm] = useState(initialForm);
   const [isPending, setIsPending] = useState(false);
+  const [previewStatus, setPreviewStatus] = useState('idle');
+  const [epubCover, setEpubCover] = useState('');
+  const previewRequestRef = useRef(0);
   const [error, setError] = useState('');
+  const manualCoverPreview = useImagePreview(form.cover);
+
+  useEffect(() => () => {
+    previewRequestRef.current += 1;
+  }, []);
+
+  async function extractEpubMetadata(file) {
+    const requestId = previewRequestRef.current + 1;
+    previewRequestRef.current = requestId;
+    setPreviewStatus('loading');
+
+    try {
+      const preview = await previewKnowledgeBook(file);
+      if (previewRequestRef.current !== requestId) return;
+
+      setForm((current) => {
+        if (current.file !== file) return current;
+        const next = { ...current };
+        for (const field of ['title', 'author', 'language', 'year', 'publisher']) {
+          if (
+            next[field] === ''
+            && preview[field] !== null
+            && preview[field] !== undefined
+          ) {
+            next[field] = String(preview[field]);
+          }
+        }
+        return next;
+      });
+      setEpubCover(preview.cover || '');
+      setPreviewStatus('success');
+    } catch {
+      if (previewRequestRef.current === requestId) setPreviewStatus('error');
+    }
+  }
+
+  function handleBookFile(file) {
+    previewRequestRef.current += 1;
+    setPreviewStatus('idle');
+    setEpubCover('');
+
+    const name = file?.name.toLowerCase() || '';
+    const format = name.endsWith('.pdf') || file?.type === 'application/pdf'
+      ? 'pdf'
+      : 'epub';
+    setForm((current) => ({ ...current, file, format }));
+    if (file && format === 'epub') extractEpubMetadata(file);
+  }
 
   function handleChange(event) {
     const { name, value, files } = event.target;
+    if (name === 'file') {
+      handleBookFile(files[0] || null);
+      return;
+    }
     setForm((current) => ({
       ...current,
       [name]: files ? files[0] || null : value,
@@ -34,7 +97,7 @@ export default function BookUploadDialog({ onClose, onUploaded }) {
 
   async function handleSubmit(event) {
     event.preventDefault();
-    if (isPending) return;
+    if (isPending || previewStatus === 'loading') return;
     if (!form.file) {
       setError('Выберите файл EPUB или PDF.');
       return;
@@ -90,34 +153,36 @@ export default function BookUploadDialog({ onClose, onUploaded }) {
               name="file"
               type="file"
               accept=".epub,.pdf"
+              disabled={isPending || previewStatus === 'loading'}
               onChange={handleChange}
             />
           </label>
 
-          <label>
-            <span>Название</span>
-            <input name="title" value={form.title} required onChange={handleChange} />
-          </label>
+          {previewStatus === 'loading' && (
+            <p className="book-preview-status" role="status">Извлекаем данные…</p>
+          )}
+          {previewStatus === 'error' && (
+            <p className="book-preview-note">
+              Не удалось извлечь данные автоматически. Заполните поля вручную.
+            </p>
+          )}
 
-          <label>
-            <span>Автор</span>
-            <input name="author" value={form.author} required onChange={handleChange} />
-          </label>
-
-          <label>
-            <span>Описание</span>
-            <textarea
-              name="description"
-              rows={4}
-              value={form.description}
-              onChange={handleChange}
-            />
-          </label>
+          <BookMetadataFields
+            form={form}
+            coverPreview={manualCoverPreview || epubCover}
+            disabled={isPending || previewStatus === 'loading'}
+            onChange={handleChange}
+          />
 
           <div className="book-upload-options">
             <label>
               <span>Формат</span>
-              <select name="format" value={form.format} onChange={handleChange}>
+              <select
+                name="format"
+                value={form.format}
+                disabled={isPending || previewStatus === 'loading'}
+                onChange={handleChange}
+              >
                 <option value="epub">EPUB</option>
                 <option value="pdf">PDF</option>
               </select>
@@ -125,7 +190,12 @@ export default function BookUploadDialog({ onClose, onUploaded }) {
 
             <label>
               <span>Видимость</span>
-              <select name="visibility" value={form.visibility} onChange={handleChange}>
+              <select
+                name="visibility"
+                value={form.visibility}
+                disabled={isPending || previewStatus === 'loading'}
+                onChange={handleChange}
+              >
                 <option value="private">Личная</option>
                 <option value="public">Публичная</option>
               </select>
@@ -138,7 +208,11 @@ export default function BookUploadDialog({ onClose, onUploaded }) {
             <button type="button" disabled={isPending} onClick={onClose}>
               Отмена
             </button>
-            <button className="primary-button" type="submit" disabled={isPending}>
+            <button
+              className="primary-button"
+              type="submit"
+              disabled={isPending || previewStatus === 'loading'}
+            >
               {isPending ? 'Загружаем…' : 'Загрузить'}
             </button>
           </div>

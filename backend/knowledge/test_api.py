@@ -207,6 +207,13 @@ class BookCatalogAPITests(KnowledgeAPITestCase):
             result_ids,
             {str(public_book.id), str(own_public_book.id)},
         )
+        serialized_books = {item["id"]: item for item in response.data["results"]}
+        self.assertFalse(serialized_books[str(public_book.id)]["can_edit"])
+        self.assertTrue(serialized_books[str(own_public_book.id)]["can_edit"])
+        for item in serialized_books.values():
+            self.assertNotIn("uploaded_by", item)
+            self.assertNotIn("user", item)
+            self.assertNotIn("email", item)
         self.assertNotIn(str(private_book.id), result_ids)
 
     def test_catalog_is_paginated_and_has_stable_newest_first_order(self):
@@ -252,8 +259,11 @@ class BookDetailAPITests(KnowledgeAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["id"], str(book.id))
+        self.assertFalse(response.data["can_edit"])
         self.assertNotIn("storage_key", response.data)
         self.assertNotIn("uploaded_by", response.data)
+        self.assertNotIn("user", response.data)
+        self.assertNotIn("email", response.data)
 
     def test_owner_can_read_private_book(self):
         book = self.create_model_book(
@@ -264,6 +274,7 @@ class BookDetailAPITests(KnowledgeAPITestCase):
         response = self.get_book(book)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["can_edit"])
 
     def test_foreign_private_book_returns_forbidden(self):
         book = self.create_model_book(
@@ -297,6 +308,10 @@ class AnonymousKnowledgeAPITests(KnowledgeAPITestCase):
         result_ids = {item["id"] for item in response.data["results"]}
         self.assertIn(str(public_book.id), result_ids)
         self.assertNotIn(str(private_book.id), result_ids)
+        serialized_book = response.data["results"][0]
+        self.assertFalse(serialized_book["can_edit"])
+        self.assertNotIn("uploaded_by", serialized_book)
+        self.assertNotIn("user", serialized_book)
 
     def test_public_book_detail_is_available(self):
         book = self.create_model_book()
@@ -472,8 +487,15 @@ class LibraryAPITests(KnowledgeAPITestCase):
         )
         self.assertEqual(serialized_entry["reading_location"], {"chapter": "chapter-3"})
         self.assertEqual(serialized_entry["reading_percentage"], "12.50")
+        self.assertFalse(serialized_entry["book"]["can_edit"])
         self.assertNotIn("uploaded_by", serialized_entry["book"])
         self.assertNotIn("storage_key", serialized_entry["book"])
+        own_private_entry = next(
+            item
+            for item in response.data["results"]
+            if item["book"]["id"] == str(own_private_book.id)
+        )
+        self.assertTrue(own_private_entry["book"]["can_edit"])
 
     def test_library_is_paginated_in_newest_added_order(self):
         for number in range(21):

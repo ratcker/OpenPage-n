@@ -10,6 +10,7 @@ import {
 import useAuth from '../../auth/useAuth.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
 import AuthorProfile from './AuthorProfile.jsx';
+import BookEditDialog from './BookEditDialog.jsx';
 import BookUploadDialog from './BookUploadDialog.jsx';
 
 const articleCards = ['Рабочие заметки', 'Полезная подборка', 'Новая идея'];
@@ -24,16 +25,49 @@ function formatProgress(value) {
   return Number.isFinite(progress) ? `${value}%` : '0%';
 }
 
-function BookCard({ book, readingPercentage, action }) {
+function BookCover({ book }) {
+  const [failedUrl, setFailedUrl] = useState('');
+
+  if (book.cover_url && failedUrl !== book.cover_url) {
+    return (
+      <div className="book-cover book-cover-image">
+        <img
+          src={book.cover_url}
+          alt={`Обложка книги «${book.title}»`}
+          loading="lazy"
+          onError={() => setFailedUrl(book.cover_url)}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="book-cover book-cover-fallback"
+      role="img"
+      aria-label={`Обложка книги «${book.title}» отсутствует`}
+    >
+      <span>{book.format.toUpperCase()}</span>
+      <i />
+    </div>
+  );
+}
+
+function BookCard({ book, readingPercentage, action, onEdit }) {
+  const authorLine = [book.author, book.year].filter(Boolean).join(' · ');
+
   return (
     <article className="book-card">
-      <div className="book-cover" aria-hidden="true">
-        <span>{book.format.toUpperCase()}</span>
-        <i />
-      </div>
+      <BookCover book={book} />
       <div className="book-card-copy">
-        <p>{book.author}</p>
+        <p>{authorLine}</p>
         <h3>{book.title}</h3>
+        {(book.publisher || book.language) && (
+          <div className="book-metadata">
+            {book.publisher && <span>{book.publisher}</span>}
+            {book.language && <strong>{book.language.toUpperCase()}</strong>}
+          </div>
+        )}
         {book.description && <span className="book-description">{book.description}</span>}
         {readingPercentage !== undefined && (
           <div className="book-progress">
@@ -45,6 +79,15 @@ function BookCard({ book, readingPercentage, action }) {
           <Link className="book-read-action" to={`/knowledge/books/${book.id}/read`}>
             Читать
           </Link>
+          {book.can_edit === true && (
+            <button
+              className="book-library-action"
+              type="button"
+              onClick={() => onEdit(book)}
+            >
+              Редактировать
+            </button>
+          )}
           {action}
         </div>
       </div>
@@ -121,6 +164,7 @@ function BookCollection({
   loadingLabel,
   library = false,
   renderBookAction,
+  onEditBook,
 }) {
   let content;
 
@@ -160,6 +204,7 @@ function BookCollection({
               action={renderBookAction?.(book)}
               book={book}
               key={library ? item.id : book.id}
+              onEdit={onEditBook}
               readingPercentage={library ? item.reading_percentage : undefined}
             />
           );
@@ -191,6 +236,7 @@ function BooksView({
   addingBookId,
   addError,
   onAddBook,
+  onEditBook,
   onOpenUpload,
 }) {
   return (
@@ -209,6 +255,7 @@ function BooksView({
           errorTitle="Не удалось загрузить библиотеку."
           loadingLabel="Загружаем вашу библиотеку…"
           library
+          onEditBook={onEditBook}
         />
 
         <BookCollection
@@ -221,6 +268,7 @@ function BooksView({
           emptyDescription="Каталог наполнится, когда появятся общедоступные книги."
           errorTitle="Не удалось загрузить каталог."
           loadingLabel="Загружаем публичные книги…"
+          onEditBook={onEditBook}
           renderBookAction={(book) => (
             <CatalogBookAction
               book={book}
@@ -277,6 +325,7 @@ export default function KnowledgePage() {
   const [addingBookId, setAddingBookId] = useState(null);
   const [addError, setAddError] = useState(null);
   const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [editingBook, setEditingBook] = useState(null);
 
   const libraryBookIds = new Set(
     libraryState.items.map((item) => item.book.id),
@@ -374,6 +423,17 @@ export default function KnowledgePage() {
     await Promise.all(updates);
   }
 
+  async function handleBookUpdated() {
+    await Promise.all([
+      getKnowledgeLibrary()
+        .then((data) => setLibraryState({ status: 'success', items: data.results }))
+        .catch(() => setLibraryState({ status: 'error', items: [] })),
+      getKnowledgeBooks()
+        .then((data) => setBooksState({ status: 'success', items: data.results }))
+        .catch(() => setBooksState({ status: 'error', items: [] })),
+    ]);
+  }
+
   return (
     <SiteLayout>
       <div className="knowledge-page">
@@ -417,6 +477,7 @@ export default function KnowledgePage() {
               addingBookId={addingBookId}
               addError={addError}
               onAddBook={handleAddBook}
+              onEditBook={setEditingBook}
               onOpenUpload={() => setIsUploadOpen(true)}
             />
           ) : (
@@ -429,6 +490,13 @@ export default function KnowledgePage() {
         <BookUploadDialog
           onClose={() => setIsUploadOpen(false)}
           onUploaded={handleBookUploaded}
+        />
+      )}
+      {editingBook && (
+        <BookEditDialog
+          book={editingBook}
+          onClose={() => setEditingBook(null)}
+          onUpdated={handleBookUpdated}
         />
       )}
     </SiteLayout>

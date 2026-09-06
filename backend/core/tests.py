@@ -102,6 +102,18 @@ class DocumentationTests(SimpleTestCase):
             {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
         )
 
+    def test_book_schema_exposes_only_computed_edit_permission(self):
+        schema = self.schema()
+        book = schema["components"]["schemas"]["Book"]
+
+        self.assertEqual(
+            book["properties"]["can_edit"],
+            {"type": "boolean", "readOnly": True},
+        )
+        self.assertNotIn("uploaded_by", book["properties"])
+        self.assertNotIn("user", book["properties"])
+        self.assertNotIn("email", book["properties"])
+
     def test_swagger_uses_openpage_template_and_static(self):
         response = self.client.get(reverse("swagger-ui"))
 

@@ -880,8 +880,8 @@ a {
   background: linear-gradient(145deg, #2d2141, #121018 72%);
 }
 
-.book-cover::before,
-.book-cover::after {
+.book-cover-fallback::before,
+.book-cover-fallback::after {
   position: absolute;
   width: 120px;
   height: 120px;
@@ -890,12 +890,12 @@ a {
   content: "";
 }
 
-.book-cover::before {
+.book-cover-fallback::before {
   top: -38px;
   right: -55px;
 }
 
-.book-cover::after {
+.book-cover-fallback::after {
   right: 26px;
   bottom: -82px;
 }
@@ -913,6 +913,18 @@ a {
   background: var(--accent);
 }
 
+.book-cover-image {
+  padding: 0;
+  background: #17131d;
+}
+
+.book-cover-image img {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: contain;
+}
+
 .book-card > div:last-child > p,
 .article-card p {
   margin: 16px 0 6px;
@@ -926,6 +938,25 @@ a {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 580;
+}
+
+.book-metadata {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  color: var(--muted-text);
+  font-size: 0.72rem;
+}
+
+.book-metadata strong {
+  padding: 3px 6px;
+  border: 1px solid #48385f;
+  border-radius: 5px;
+  color: #c9b6ef;
+  font-size: 0.62rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
 }
 
 .book-description {
@@ -1198,6 +1229,57 @@ a {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
+}
+
+.book-metadata-options {
+  grid-template-columns: minmax(0, 1fr) 120px;
+}
+
+.book-preview-status,
+.book-preview-note {
+  margin: 0;
+  padding: 11px 13px;
+  border: 1px solid #3d3449;
+  border-radius: 7px;
+  color: var(--muted-text);
+  background: #18141e;
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.book-preview-status {
+  color: #c9b6ef;
+}
+
+.book-form-cover-preview {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #100e15;
+}
+
+.book-form-cover-preview img {
+  width: 58px;
+  height: 74px;
+  display: block;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #18141e;
+}
+
+.book-form-cover-preview span {
+  color: var(--muted-text);
+  font-size: 0.75rem;
+}
+
+.book-upload-form input:disabled,
+.book-upload-form textarea:disabled,
+.book-upload-form select:disabled {
+  cursor: default;
+  opacity: 0.65;
 }
 
 .book-upload-error {
