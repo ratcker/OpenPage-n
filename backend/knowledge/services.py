@@ -3,13 +3,14 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from .covers import read_cover_image
+from .covers import read_cover_image, read_image
 from .epub import InvalidEpubError, extract_epub_metadata
-from .models import Book, UserLibraryBook
+from .models import Book, KnowledgeProfile, UserLibraryBook
 from .storage import (
     book_cover_storage_key,
     book_storage_key,
     get_knowledge_storage,
+    profile_avatar_storage_key,
 )
 
 
@@ -149,3 +150,107 @@ def update_book_metadata(*, book, data, storage=None):
     if new_cover_key and old_cover_key:
         storage.delete(old_cover_key)
     return book
+
+
+def create_knowledge_profile(*, user, data, storage=None):
+    if storage is None:
+        storage = get_knowledge_storage()
+
+    values = dict(data)
+    avatar = values.pop("avatar", None)
+    profile = KnowledgeProfile(user=user, **values)
+    avatar_key = ""
+
+    if avatar is not None:
+        content, media_type = read_image(
+            avatar,
+            getattr(avatar, "content_type", None),
+            subject="Аватар",
+        )
+        avatar_key = profile_avatar_storage_key(profile.public_id, media_type)
+
+    try:
+        if avatar_key:
+            storage.save(avatar_key, content)
+            if not storage.exists(avatar_key):
+                raise OSError("Storage did not persist the profile avatar.")
+            profile.avatar = avatar_key
+
+        with transaction.atomic():
+            profile.full_clean()
+            profile.save(force_insert=True)
+    except Exception:
+        if avatar_key:
+            _cleanup(storage, [avatar_key])
+        raise
+
+    return profile
+
+
+def update_knowledge_profile(*, profile, data, storage=None):
+    if storage is None:
+        storage = get_knowledge_storage()
+
+    changes = dict(data)
+    avatar = changes.pop("avatar", None)
+    old_values = {field: getattr(profile, field) for field in changes}
+    old_avatar_key = profile.avatar
+    new_avatar_key = ""
+
+    if avatar is not None:
+        content, media_type = read_image(
+            avatar,
+            getattr(avatar, "content_type", None),
+            subject="Аватар",
+        )
+        new_avatar_key = profile_avatar_storage_key(profile.public_id, media_type)
+        try:
+            storage.save(new_avatar_key, content)
+            if not storage.exists(new_avatar_key):
+                raise OSError("Storage did not persist the profile avatar.")
+        except Exception:
+            _cleanup(storage, [new_avatar_key])
+            raise
+        changes["avatar"] = new_avatar_key
+
+    if not changes:
+        return profile
+
+    try:
+        with transaction.atomic():
+            for field, value in changes.items():
+                setattr(profile, field, value)
+            profile.full_clean()
+            profile.save(update_fields=changes.keys())
+
+            # При ошибке удаления DB-транзакция вернёт ссылку на старый avatar.
+            if new_avatar_key and old_avatar_key:
+                storage.delete(old_avatar_key)
+    except Exception:
+        for field, value in old_values.items():
+            setattr(profile, field, value)
+        profile.avatar = old_avatar_key
+        if new_avatar_key:
+            _cleanup(storage, [new_avatar_key])
+        raise
+
+    return profile
+
+
+def delete_knowledge_profile_avatar(*, profile, storage=None):
+    if not profile.avatar:
+        return profile
+    if storage is None:
+        storage = get_knowledge_storage()
+
+    old_avatar_key = profile.avatar
+    try:
+        with transaction.atomic():
+            profile.avatar = ""
+            profile.save(update_fields=("avatar",))
+            storage.delete(old_avatar_key)
+    except Exception:
+        profile.avatar = old_avatar_key
+        raise
+
+    return profile

@@ -50,7 +50,20 @@ class DocumentationTests(SimpleTestCase):
             "/api/knowledge/library/{book_uuid}/progress/": {
                 "patch": "knowledge_library_progress_update"
             },
-            "/api/knowledge/profile/": {"get": "knowledge_profile_retrieve"},
+            "/api/knowledge/profile/": {
+                "get": "knowledge_profile_retrieve",
+                "post": "knowledge_profile_create",
+                "patch": "knowledge_profile_update",
+            },
+            "/api/knowledge/profile/avatar/": {
+                "delete": "knowledge_profile_avatar_delete"
+            },
+            "/api/knowledge/authors/{profile_uuid}/": {
+                "get": "knowledge_author_retrieve"
+            },
+            "/api/knowledge/authors/{profile_uuid}/books/": {
+                "get": "knowledge_author_books_list"
+            },
         }
 
         operation_ids = []
@@ -74,6 +87,9 @@ class DocumentationTests(SimpleTestCase):
             ("/api/knowledge/library/{book_uuid}/", "post"),
             ("/api/knowledge/library/{book_uuid}/progress/", "patch"),
             ("/api/knowledge/profile/", "get"),
+            ("/api/knowledge/profile/", "post"),
+            ("/api/knowledge/profile/", "patch"),
+            ("/api/knowledge/profile/avatar/", "delete"),
         }
 
         for path, methods in schema["paths"].items():
@@ -113,6 +129,29 @@ class DocumentationTests(SimpleTestCase):
         self.assertNotIn("uploaded_by", book["properties"])
         self.assertNotIn("user", book["properties"])
         self.assertNotIn("email", book["properties"])
+
+    def test_profile_schema_uses_multipart_and_hides_avatar_key(self):
+        schema = self.schema()
+        profile_schema = schema["components"]["schemas"]["KnowledgeProfile"]
+
+        self.assertEqual(
+            set(profile_schema["properties"]),
+            {"id", "display_name", "bio", "avatar_url"},
+        )
+        self.assertNotIn("avatar", profile_schema["properties"])
+        self.assertNotIn("user", profile_schema["properties"])
+
+        for method in ("post", "patch"):
+            operation = schema["paths"]["/api/knowledge/profile/"][method]
+            content = operation["requestBody"]["content"]
+            self.assertEqual(set(content), {"multipart/form-data"})
+            component_reference = content["multipart/form-data"]["schema"]["$ref"]
+            component_name = component_reference.rsplit("/", 1)[-1]
+            request_schema = schema["components"]["schemas"][component_name]
+            self.assertEqual(
+                request_schema["properties"]["avatar"],
+                {"type": "string", "format": "binary"},
+            )
 
     def test_swagger_uses_openpage_template_and_static(self):
         response = self.client.get(reverse("swagger-ui"))

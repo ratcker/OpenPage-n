@@ -12,6 +12,7 @@ def max_publication_year():
 
 # Профиль пользователя внутри Базы знаний
 class KnowledgeProfile(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -22,7 +23,7 @@ class KnowledgeProfile(models.Model):
     avatar = models.CharField(
         max_length=500,
         blank=True,
-        help_text="Логический ключ будущего объекта в хранилище.",
+        help_text="Логический ключ avatar в Knowledge storage.",
     )
 
     class Meta:

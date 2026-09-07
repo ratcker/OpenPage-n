@@ -5,10 +5,13 @@ from .views import (
     BookDetailView,
     BookListView,
     EpubPreviewView,
+    KnowledgeProfileAvatarView,
     KnowledgeProfileView,
     LibraryAddView,
     LibraryListView,
     LibraryProgressView,
+    PublicAuthorBooksView,
+    PublicAuthorView,
 )
 
 urlpatterns = [
@@ -40,4 +43,19 @@ urlpatterns = [
         name="knowledge_library_progress",
     ),
     path("profile/", KnowledgeProfileView.as_view(), name="knowledge_profile"),
+    path(
+        "profile/avatar/",
+        KnowledgeProfileAvatarView.as_view(),
+        name="knowledge_profile_avatar",
+    ),
+    path(
+        "authors/<uuid:profile_uuid>/",
+        PublicAuthorView.as_view(),
+        name="knowledge_author",
+    ),
+    path(
+        "authors/<uuid:profile_uuid>/books/",
+        PublicAuthorBooksView.as_view(),
+        name="knowledge_author_books",
+    ),
 ]

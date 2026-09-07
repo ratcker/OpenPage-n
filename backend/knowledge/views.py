@@ -3,6 +3,7 @@ import base64
 from django.conf import settings
 from django.db import transaction
 from django.db.models import Q
+from django.db.utils import IntegrityError
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
 from rest_framework import status
@@ -24,10 +25,17 @@ from .serializers import (
     EpubPreviewUploadSerializer,
     KnowledgeDetailResponseSerializer,
     KnowledgeProfileSerializer,
+    KnowledgeProfileWriteSerializer,
     ReadingProgressSerializer,
     UserLibraryBookSerializer,
 )
-from .services import create_book, update_book_metadata
+from .services import (
+    create_book,
+    create_knowledge_profile,
+    delete_knowledge_profile_avatar,
+    update_book_metadata,
+    update_knowledge_profile,
+)
 from .storage import get_knowledge_storage
 
 KNOWLEDGE_TAG = "База знаний"
@@ -40,6 +48,11 @@ VALIDATION_ERROR_SCHEMA = {
         ]
     },
 }
+
+
+class Conflict(APIException):
+    status_code = status.HTTP_409_CONFLICT
+    default_code = "conflict"
 
 
 def _can_access_book(user, book):
@@ -503,6 +516,7 @@ class LibraryProgressView(GenericAPIView):
 
 class KnowledgeProfileView(GenericAPIView):
     permission_classes = (IsAuthenticated,)
+    parser_classes = (MultiPartParser,)
     serializer_class = KnowledgeProfileSerializer
 
     @extend_schema(
@@ -521,4 +535,206 @@ class KnowledgeProfileView(GenericAPIView):
     )
     def get(self, request):
         profile = get_object_or_404(KnowledgeProfile, user=request.user)
-        return Response(KnowledgeProfileSerializer(profile).data)
+        storage = get_knowledge_storage()
+        return Response(
+            KnowledgeProfileSerializer(
+                profile,
+                context={"knowledge_storage": storage},
+            ).data
+        )
+
+    @extend_schema(
+        operation_id="knowledge_profile_create",
+        summary="Создать профиль автора",
+        description=(
+            "Создаёт KnowledgeProfile текущего пользователя сразу, без moderation. "
+            "Повторное создание возвращает 409 Conflict."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        request=KnowledgeProfileWriteSerializer,
+        responses={
+            201: KnowledgeProfileSerializer,
+            400: OpenApiResponse(
+                response=VALIDATION_ERROR_SCHEMA,
+                description="Поля профиля или avatar не прошли валидацию.",
+            ),
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            409: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="KnowledgeProfile уже существует.",
+            ),
+        },
+    )
+    def post(self, request):
+        if KnowledgeProfile.objects.filter(user=request.user).exists():
+            raise Conflict("Профиль автора уже существует.")
+
+        serializer = KnowledgeProfileWriteSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        storage = get_knowledge_storage()
+        try:
+            profile = create_knowledge_profile(
+                user=request.user,
+                data=serializer.validated_data,
+                storage=storage,
+            )
+        except IntegrityError as error:
+            if KnowledgeProfile.objects.filter(user=request.user).exists():
+                raise Conflict("Профиль автора уже существует.") from error
+            raise APIException("Не удалось создать профиль автора.") from error
+        except Exception as error:
+            raise APIException("Не удалось создать профиль автора.") from error
+
+        return Response(
+            KnowledgeProfileSerializer(
+                profile,
+                context={"knowledge_storage": storage},
+            ).data,
+            status=status.HTTP_201_CREATED,
+        )
+
+    @extend_schema(
+        operation_id="knowledge_profile_update",
+        summary="Изменить профиль автора",
+        description=(
+            "Обновляет профиль текущего пользователя. Новый avatar безопасно "
+            "заменяет предыдущий объект в Knowledge storage."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        request=KnowledgeProfileWriteSerializer(partial=True),
+        responses={
+            200: KnowledgeProfileSerializer,
+            400: OpenApiResponse(
+                response=VALIDATION_ERROR_SCHEMA,
+                description="Поля профиля или avatar не прошли валидацию.",
+            ),
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="KnowledgeProfile отсутствует.",
+            ),
+        },
+    )
+    def patch(self, request):
+        profile = get_object_or_404(KnowledgeProfile, user=request.user)
+        serializer = KnowledgeProfileWriteSerializer(
+            data=request.data,
+            partial=True,
+        )
+        serializer.is_valid(raise_exception=True)
+        storage = get_knowledge_storage()
+        try:
+            profile = update_knowledge_profile(
+                profile=profile,
+                data=serializer.validated_data,
+                storage=storage,
+            )
+        except Exception as error:
+            raise APIException("Не удалось обновить профиль автора.") from error
+
+        return Response(
+            KnowledgeProfileSerializer(
+                profile,
+                context={"knowledge_storage": storage},
+            ).data
+        )
+
+
+class KnowledgeProfileAvatarView(GenericAPIView):
+    permission_classes = (IsAuthenticated,)
+    serializer_class = KnowledgeProfileSerializer
+
+    @extend_schema(
+        operation_id="knowledge_profile_avatar_delete",
+        summary="Удалить avatar профиля автора",
+        description=(
+            "Удаляет avatar текущего пользователя. Повторный вызов без avatar "
+            "возвращает неизменённый профиль."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        request=None,
+        responses={
+            200: KnowledgeProfileSerializer,
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="KnowledgeProfile отсутствует.",
+            ),
+        },
+    )
+    def delete(self, request):
+        profile = get_object_or_404(KnowledgeProfile, user=request.user)
+        storage = get_knowledge_storage()
+        try:
+            profile = delete_knowledge_profile_avatar(
+                profile=profile,
+                storage=storage,
+            )
+        except Exception as error:
+            raise APIException("Не удалось удалить avatar профиля.") from error
+
+        return Response(
+            KnowledgeProfileSerializer(
+                profile,
+                context={"knowledge_storage": storage},
+            ).data
+        )
+
+
+class PublicAuthorView(GenericAPIView):
+    permission_classes = (AllowAny,)
+    serializer_class = KnowledgeProfileSerializer
+
+    @extend_schema(
+        operation_id="knowledge_author_retrieve",
+        summary="Получить публичный профиль автора",
+        description="Возвращает только публично безопасные поля KnowledgeProfile.",
+        tags=[KNOWLEDGE_TAG],
+        auth=[],
+        responses={
+            200: KnowledgeProfileSerializer,
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Профиль автора не найден.",
+            ),
+        },
+    )
+    def get(self, request, profile_uuid):
+        profile = get_object_or_404(KnowledgeProfile, public_id=profile_uuid)
+        storage = get_knowledge_storage()
+        return Response(
+            KnowledgeProfileSerializer(
+                profile,
+                context={"knowledge_storage": storage},
+            ).data
+        )
+
+
+class PublicAuthorBooksView(GenericAPIView):
+    permission_classes = (AllowAny,)
+    pagination_class = KnowledgePagination
+    serializer_class = BookSerializer
+
+    @extend_schema(
+        operation_id="knowledge_author_books_list",
+        summary="Получить публичные книги автора",
+        description="Возвращает публичные книги автора, новые сверху.",
+        tags=[KNOWLEDGE_TAG],
+        auth=[],
+        responses={
+            200: BookSerializer(many=True),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Профиль автора не найден.",
+            ),
+        },
+    )
+    def get(self, request, profile_uuid):
+        profile = get_object_or_404(KnowledgeProfile, public_id=profile_uuid)
+        books = Book.objects.filter(
+            uploaded_by_id=profile.user_id,
+            visibility=Book.Visibility.PUBLIC,
+        ).order_by("-created_at", "-id")
+        page = self.paginate_queryset(books)
+        serializer = BookSerializer(page, many=True, context={"request": request})
+        return self.get_paginated_response(serializer.data)

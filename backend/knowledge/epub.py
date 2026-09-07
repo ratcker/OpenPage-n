@@ -8,7 +8,7 @@ from urllib.parse import unquote, urlsplit
 from xml.etree import ElementTree
 from zipfile import BadZipFile, ZipFile
 
-from .covers import MAX_COVER_BYTES, detect_image_type
+from .covers import MAX_IMAGE_BYTES, detect_image_type
 
 MAX_EPUB_BYTES = 50 * 1024 * 1024
 MAX_EPUB_ENTRIES = 2000
@@ -209,7 +209,7 @@ def extract_epub_metadata(file):
                 )
                 if cover_path:
                     try:
-                        cover = _read_entry(archive, cover_path, MAX_COVER_BYTES)
+                        cover = _read_entry(archive, cover_path, MAX_IMAGE_BYTES)
                     except InvalidEpubError:
                         cover = None
                     media_type = detect_image_type(cover or b"")

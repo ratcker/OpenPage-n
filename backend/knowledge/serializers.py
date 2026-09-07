@@ -3,7 +3,7 @@ from datetime import date
 from django.conf import settings
 from rest_framework import serializers
 
-from .covers import read_cover_image
+from .covers import read_cover_image, read_image
 from .models import Book, KnowledgeProfile, UserLibraryBook
 from .storage import get_knowledge_storage
 
@@ -11,6 +11,18 @@ from .storage import get_knowledge_storage
 def _validate_cover(value):
     try:
         read_cover_image(value, value.content_type)
+    except ValueError as error:
+        raise serializers.ValidationError(str(error)) from error
+    return value
+
+
+def _validate_avatar(value):
+    try:
+        read_image(
+            value,
+            getattr(value, "content_type", None),
+            subject="Аватар",
+        )
     except ValueError as error:
         raise serializers.ValidationError(str(error)) from error
     return value
@@ -190,10 +202,39 @@ class BookContentSerializer(serializers.Serializer):
 
 
 class KnowledgeProfileSerializer(serializers.ModelSerializer):
+    id = serializers.UUIDField(source="public_id", read_only=True)
+    avatar_url = serializers.SerializerMethodField()
+
+    def get_avatar_url(self, profile) -> str | None:
+        if not profile.avatar:
+            return None
+        storage = self.context.get("knowledge_storage")
+        if storage is None:
+            storage = get_knowledge_storage()
+        return storage.get_presigned_url(
+            profile.avatar,
+            settings.KNOWLEDGE_CONTENT_URL_TTL_SECONDS,
+        )
+
     class Meta:
         model = KnowledgeProfile
-        fields = ("id", "display_name", "bio", "avatar")
+        fields = ("id", "display_name", "bio", "avatar_url")
         read_only_fields = fields
+
+
+class KnowledgeProfileWriteSerializer(serializers.Serializer):
+    display_name = serializers.CharField(
+        required=True,
+        max_length=100,
+        trim_whitespace=True,
+    )
+    bio = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        max_length=2000,
+        trim_whitespace=True,
+    )
+    avatar = serializers.FileField(required=False, validators=[_validate_avatar])
 
 
 class KnowledgeDetailResponseSerializer(serializers.Serializer):

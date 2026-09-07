@@ -762,9 +762,10 @@ class KnowledgeProfileAPITests(KnowledgeAPITestCase):
         response = self.client.get(self.url)
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data["id"], profile.id)
+        self.assertEqual(response.data["id"], str(profile.public_id))
         self.assertEqual(response.data["display_name"], "Автор материалов")
-        self.assertNotEqual(response.data["id"], other_profile.id)
+        self.assertNotEqual(response.data["id"], str(other_profile.public_id))
+        self.assertNotIn("avatar", response.data)
         self.assertNotIn("user", response.data)
 
     def test_missing_profile_returns_not_found(self):

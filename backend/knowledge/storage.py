@@ -45,6 +45,30 @@ def book_cover_storage_key(book_id, media_type, cover_id=None):
     return f"books/{normalized_id}/covers/{normalized_cover_id}.{extension}"
 
 
+def profile_avatar_storage_key(profile_id, media_type, avatar_id=None):
+    """Строит новый ключ avatar без пользовательского имени файла."""
+    try:
+        normalized_profile_id = UUID(str(profile_id))
+        normalized_avatar_id = UUID(str(avatar_id)) if avatar_id else uuid4()
+    except (TypeError, ValueError, AttributeError) as error:
+        raise ValueError("Profile and avatar ids must be valid UUIDs.") from error
+
+    extensions = {
+        "image/gif": "gif",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/webp": "webp",
+    }
+    try:
+        extension = extensions[media_type]
+    except KeyError as error:
+        raise ValueError("Unsupported avatar image type.") from error
+
+    return (
+        f"profiles/{normalized_profile_id}/avatars/{normalized_avatar_id}.{extension}"
+    )
+
+
 def _validate_key(key):
     if not isinstance(key, str) or not key or "\\" in key:
         raise ValueError("Storage key must be a non-empty POSIX path.")

@@ -6,8 +6,9 @@ from .models import Book, KnowledgeProfile, UserLibraryBook
 # Профили авторов материалов
 @admin.register(KnowledgeProfile)
 class KnowledgeProfileAdmin(admin.ModelAdmin):
-    list_display = ("user", "display_name")
+    list_display = ("user", "display_name", "public_id")
     search_fields = ("user__email", "user__name", "display_name")
+    readonly_fields = ("public_id",)
     raw_id_fields = ("user",)
 
 
