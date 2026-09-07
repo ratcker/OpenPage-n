@@ -214,6 +214,35 @@ describe('авторизация и маршруты', () => {
     expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
   });
 
+  it('оставляет public author route доступным анонимному пользователю', async () => {
+    const publicId = '9a7c27e5-c9d4-428f-bc28-7ebaf83088cf';
+    const fetchMock = mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+      [`/api/knowledge/authors/${publicId}/`]: () => Promise.resolve(jsonResponse({
+        id: publicId,
+        display_name: 'Публичный автор',
+        bio: '',
+        avatar_url: null,
+      })),
+      [`/api/knowledge/authors/${publicId}/books/`]: () => Promise.resolve(jsonResponse({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
+      })),
+    });
+
+    renderApp(`/knowledge/authors/${publicId}`);
+
+    expect(await screen.findByRole('heading', { name: 'Публичный автор' }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('heading', {
+      name: 'У автора пока нет публичных книг.',
+    })).toBeInTheDocument();
+    const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
+    expect(requestedPaths).not.toContain('/api/knowledge/profile/');
+  });
+
   it('автоматически входит после подтверждения email', async () => {
     const verifyHandler = vi.fn(() => Promise.resolve(jsonResponse({ detail: 'Email confirmed' })));
     const loginHandler = vi.fn(() => Promise.resolve(jsonResponse(session)));

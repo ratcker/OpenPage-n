@@ -1,7 +1,8 @@
 import { useState } from 'react';
 
 import { updateKnowledgeBook } from '../../api/knowledge.js';
-import BookMetadataFields, { useImagePreview } from './BookMetadataFields.jsx';
+import BookMetadataFields from './BookMetadataFields.jsx';
+import useImagePreview from './useImagePreview.js';
 
 function formFromBook(book) {
   return {

@@ -4,7 +4,8 @@ import {
   previewKnowledgeBook,
   uploadKnowledgeBook,
 } from '../../api/knowledge.js';
-import BookMetadataFields, { useImagePreview } from './BookMetadataFields.jsx';
+import BookMetadataFields from './BookMetadataFields.jsx';
+import useImagePreview from './useImagePreview.js';
 
 const initialForm = {
   file: null,

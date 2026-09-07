@@ -14,6 +14,44 @@ export function getKnowledgeProfile() {
   return authorizedRequest(`${KNOWLEDGE_URL}/profile/`);
 }
 
+function knowledgeProfileBody(data) {
+  const body = new FormData();
+  for (const field of ['display_name', 'bio']) {
+    if (Object.hasOwn(data, field)) body.append(field, data[field]);
+  }
+  if (data.avatar) body.append('avatar', data.avatar);
+  return body;
+}
+
+export function createKnowledgeProfile(data) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/profile/`, {
+    method: 'POST',
+    body: knowledgeProfileBody(data),
+  });
+}
+
+export function updateKnowledgeProfile(data) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/profile/`, {
+    method: 'PATCH',
+    body: knowledgeProfileBody(data),
+  });
+}
+
+export function deleteKnowledgeProfileAvatar() {
+  return authorizedRequest(`${KNOWLEDGE_URL}/profile/avatar/`, {
+    method: 'DELETE',
+  });
+}
+
+export function getKnowledgeAuthor(publicId) {
+  return request(`${KNOWLEDGE_URL}/authors/${publicId}/`);
+}
+
+export function getKnowledgeAuthorBooks(publicId, page) {
+  const query = page && page > 1 ? `?page=${page}` : '';
+  return request(`${KNOWLEDGE_URL}/authors/${publicId}/books/${query}`);
+}
+
 function readerRequest(path, authenticated) {
   return authenticated ? authorizedRequest(path) : request(path);
 }

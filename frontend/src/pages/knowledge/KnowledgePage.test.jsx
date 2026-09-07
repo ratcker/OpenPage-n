@@ -62,10 +62,10 @@ const libraryItem = {
 };
 
 const profile = {
-  id: 9,
+  id: '9a7c27e5-c9d4-428f-bc28-7ebaf83088cf',
   display_name: 'Анна Кузнецова',
   bio: 'Собираю материалы о дизайне и разработке.',
-  avatar: 'АК',
+  avatar_url: 'https://storage.example.test/avatar.png',
 };
 
 function deferred() {
@@ -274,9 +274,14 @@ describe('KnowledgePage', () => {
     expect(screen.getByText('37.50%')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: profile.display_name })).toBeInTheDocument();
     expect(screen.getByText(profile.bio)).toBeInTheDocument();
-    expect(screen.getByText('АК')).toBeInTheDocument();
+    expect(screen.getByRole('img', {
+      name: `Аватар автора ${profile.display_name}`,
+    })).toHaveAttribute('src', profile.avatar_url);
     expect(screen.getByRole('button', { name: 'Добавить в библиотеку' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Редактировать профиль' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Удалить аватар' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Открыть публичный профиль' }))
+      .toHaveAttribute('href', `/knowledge/authors/${profile.id}`);
     expect(screen.getByRole('button', { name: 'Загрузить книгу' })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: 'Читать' })).toHaveLength(2);
     expect(screen.getAllByRole('link', { name: 'Читать' })[0]).toHaveAttribute(
@@ -319,7 +324,7 @@ describe('KnowledgePage', () => {
       'href',
       `/knowledge/books/${publicBook.id}/read`,
     );
-    expect(screen.getByRole('button', { name: 'Создать профиль автора' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Стать автором' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Добавить в библиотеку' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument();
@@ -837,8 +842,264 @@ describe('KnowledgePage', () => {
     expect(await screen.findByRole('heading', { name: 'Профиль автора не создан' })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Создать профиль автора' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Стать автором' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
+  });
+
+  it('создаёт профиль через multipart и сразу включает author-state', async () => {
+    const createdProfile = {
+      ...profile,
+      display_name: 'Новый автор',
+      bio: 'Пишу о чтении.',
+    };
+    let createOptions;
+    mockKnowledgeApi({
+      '/api/knowledge/profile/': (options) => {
+        if (options?.method === 'POST') {
+          createOptions = options;
+          return Promise.resolve(jsonResponse(createdProfile, 201));
+        }
+        return Promise.resolve(jsonResponse({ detail: 'Не найдено' }, 404));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Стать автором' }));
+    expect(screen.getByRole('dialog', { name: 'Стать автором' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Отображаемое имя')).toBeRequired();
+    expect(screen.getByLabelText('Описание')).toBeInTheDocument();
+    expect(screen.getByLabelText('Аватар')).toHaveAttribute('type', 'file');
+
+    await browser.type(screen.getByLabelText('Отображаемое имя'), createdProfile.display_name);
+    await browser.type(screen.getByLabelText('Описание'), createdProfile.bio);
+    const avatar = new File(['avatar'], 'avatar.png', { type: 'image/png' });
+    await browser.upload(screen.getByLabelText('Аватар'), avatar);
+
+    expect(await screen.findByRole('img', { name: 'Предпросмотр аватара' }))
+      .toHaveAttribute('src', expect.stringMatching(/^data:image\/png;base64,/));
+    expect(screen.queryByRole('button', { name: 'Удалить аватар' }))
+      .not.toBeInTheDocument();
+    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByRole('heading', { name: createdProfile.display_name }))
+      .toBeInTheDocument();
+    expect(screen.getByText(createdProfile.bio)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Загрузить книгу' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Стать автором' })).not.toBeInTheDocument();
+    expect(createOptions.method).toBe('POST');
+    expect(createOptions.body).toBeInstanceOf(FormData);
+    expect(createOptions.headers).not.toHaveProperty('Content-Type');
+    expect(createOptions.body.get('display_name')).toBe(createdProfile.display_name);
+    expect(createOptions.body.get('bio')).toBe(createdProfile.bio);
+    expect(createOptions.body.get('avatar')).toEqual(avatar);
+  });
+
+  it('создаёт профиль без optional avatar', async () => {
+    const createdProfile = {
+      ...profile,
+      display_name: 'Автор без аватара',
+      bio: '',
+      avatar_url: null,
+    };
+    let createOptions;
+    mockKnowledgeApi({
+      '/api/knowledge/profile/': (options) => {
+        if (options?.method === 'POST') {
+          createOptions = options;
+          return Promise.resolve(jsonResponse(createdProfile, 201));
+        }
+        return Promise.resolve(jsonResponse({ detail: 'Не найдено' }, 404));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Стать автором' }));
+    await browser.type(screen.getByLabelText('Отображаемое имя'), createdProfile.display_name);
+    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByRole('heading', { name: createdProfile.display_name }))
+      .toBeInTheDocument();
+    expect(screen.getByText('АБ')).toBeInTheDocument();
+    expect(createOptions.body.get('bio')).toBe('');
+    expect(createOptions.body.has('avatar')).toBe(false);
+  });
+
+  it('оставляет create dialog заполненным при validation и network errors', async () => {
+    let submitCount = 0;
+    mockKnowledgeApi({
+      '/api/knowledge/profile/': (options) => {
+        if (!options?.method) {
+          return Promise.resolve(jsonResponse({ detail: 'Не найдено' }, 404));
+        }
+        submitCount += 1;
+        if (submitCount === 1) {
+          return Promise.resolve(jsonResponse({ display_name: ['Имя уже занято.'] }, 400));
+        }
+        return Promise.reject(new TypeError('Failed to fetch'));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Стать автором' }));
+    await browser.type(screen.getByLabelText('Отображаемое имя'), 'Черновик автора');
+    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Имя уже занято.');
+    expect(screen.getByLabelText('Отображаемое имя')).toHaveValue('Черновик автора');
+
+    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось сохранить профиль. Проверьте соединение и попробуйте ещё раз.',
+    );
+    expect(screen.getByLabelText('Отображаемое имя')).toHaveValue('Черновик автора');
+  });
+
+  it('после 409 повторно получает существующий профиль', async () => {
+    let profileReads = 0;
+    mockKnowledgeApi({
+      '/api/knowledge/profile/': (options) => {
+        if (options?.method === 'POST') {
+          return Promise.resolve(jsonResponse({ detail: 'Профиль уже существует.' }, 409));
+        }
+        profileReads += 1;
+        return Promise.resolve(profileReads === 1
+          ? jsonResponse({ detail: 'Не найдено' }, 404)
+          : jsonResponse(profile));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Стать автором' }));
+    await browser.type(screen.getByLabelText('Отображаемое имя'), 'Конфликтующий профиль');
+    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByRole('heading', { name: profile.display_name }))
+      .toBeInTheDocument();
+    expect(profileReads).toBe(2);
+    expect(screen.getByRole('button', { name: 'Загрузить книгу' })).toBeInTheDocument();
+  });
+
+  it('редактирует профиль, показывает новый avatar preview и обновляет карточку', async () => {
+    const updatedProfile = {
+      ...profile,
+      display_name: 'Анна — редактор',
+      bio: 'Обновлённое описание.',
+      avatar_url: 'https://storage.example.test/new-avatar.png',
+    };
+    let patchOptions;
+    mockKnowledgeApi({
+      '/api/knowledge/profile/': (options) => {
+        if (options?.method === 'PATCH') {
+          patchOptions = options;
+          return Promise.resolve(jsonResponse(updatedProfile));
+        }
+        return Promise.resolve(jsonResponse(profile));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Редактировать профиль' }));
+    expect(screen.getByRole('dialog', { name: 'Редактировать профиль' }))
+      .toBeInTheDocument();
+    expect(screen.getByLabelText('Отображаемое имя')).toHaveValue(profile.display_name);
+    expect(screen.getByLabelText('Описание')).toHaveValue(profile.bio);
+    expect(screen.getByLabelText('Аватар')).toHaveValue('');
+    expect(screen.getByRole('img', { name: 'Предпросмотр аватара' }))
+      .toHaveAttribute('src', profile.avatar_url);
+
+    await browser.clear(screen.getByLabelText('Отображаемое имя'));
+    await browser.type(screen.getByLabelText('Отображаемое имя'), updatedProfile.display_name);
+    await browser.clear(screen.getByLabelText('Описание'));
+    await browser.type(screen.getByLabelText('Описание'), updatedProfile.bio);
+    const avatar = new File(['new-avatar'], 'new-avatar.webp', { type: 'image/webp' });
+    await browser.upload(screen.getByLabelText('Аватар'), avatar);
+    expect(await screen.findByText('Новый аватар')).toBeInTheDocument();
+    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByRole('heading', { name: updatedProfile.display_name }))
+      .toBeInTheDocument();
+    expect(screen.getByText(updatedProfile.bio)).toBeInTheDocument();
+    expect(patchOptions.method).toBe('PATCH');
+    expect(patchOptions.body).toBeInstanceOf(FormData);
+    expect(patchOptions.headers).not.toHaveProperty('Content-Type');
+    expect(patchOptions.body.get('display_name')).toBe(updatedProfile.display_name);
+    expect(patchOptions.body.get('bio')).toBe(updatedProfile.bio);
+    expect(patchOptions.body.get('avatar')).toEqual(avatar);
+  });
+
+  it('оставляет edit dialog открытым при validation error', async () => {
+    mockKnowledgeApi({
+      '/api/knowledge/profile/': (options) => (
+        options?.method === 'PATCH'
+          ? Promise.resolve(jsonResponse({ display_name: ['Введите имя.'] }, 400))
+          : Promise.resolve(jsonResponse(profile))
+      ),
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Редактировать профиль' }));
+    await browser.clear(screen.getByLabelText('Отображаемое имя'));
+    await browser.type(screen.getByLabelText('Отображаемое имя'), 'Черновик');
+    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Введите имя.');
+    expect(screen.getByRole('dialog', { name: 'Редактировать профиль' }))
+      .toBeInTheDocument();
+    expect(screen.getByLabelText('Отображаемое имя')).toHaveValue('Черновик');
+  });
+
+  it('удаляет avatar и сразу показывает fallback', async () => {
+    let deleteOptions;
+    mockKnowledgeApi({
+      '/api/knowledge/profile/avatar/': (options) => {
+        deleteOptions = options;
+        return Promise.resolve(jsonResponse({ ...profile, avatar_url: null }));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await screen.findByRole('button', { name: 'Редактировать профиль' });
+    expect(screen.queryByRole('button', { name: 'Удалить аватар' }))
+      .not.toBeInTheDocument();
+    await browser.click(screen.getByRole('button', { name: 'Редактировать профиль' }));
+    await browser.click(screen.getByRole('button', { name: 'Удалить аватар' }));
+
+    expect(await screen.findByText('АК')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Удалить аватар' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Редактировать профиль' }))
+      .toBeInTheDocument();
+    expect(deleteOptions.method).toBe('DELETE');
+    expect(deleteOptions.headers).toEqual(expect.objectContaining({
+      Authorization: 'Bearer knowledge-token',
+    }));
+  });
+
+  it('не ломает профиль при ошибке удаления avatar', async () => {
+    mockKnowledgeApi({
+      '/api/knowledge/profile/avatar/': () => Promise.resolve(
+        jsonResponse({ detail: 'Storage error' }, 500),
+      ),
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Редактировать профиль' }));
+    await browser.click(screen.getByRole('button', { name: 'Удалить аватар' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось удалить аватар. Попробуйте ещё раз.',
+    );
+    expect(screen.getByRole('img', {
+      name: `Аватар автора ${profile.display_name}`,
+    })).toHaveAttribute('src', profile.avatar_url);
+    expect(screen.getByRole('button', { name: 'Удалить аватар' })).toBeEnabled();
   });
 
   it('отличает серверную ошибку профиля от missing state', async () => {

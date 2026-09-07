@@ -1,3 +1,6 @@
+import { useState } from 'react';
+import { Link } from 'react-router-dom';
+
 function initials(name) {
   return name
     .split(/\s+/)
@@ -8,14 +11,34 @@ function initials(name) {
     .toUpperCase() || 'OP';
 }
 
-function avatarLabel(profile) {
-  const avatar = profile.avatar.trim();
-  return avatar && !avatar.includes('/')
-    ? avatar.slice(0, 2).toUpperCase()
-    : initials(profile.display_name);
+export function ProfileAvatar({ profile }) {
+  const [failedUrl, setFailedUrl] = useState('');
+
+  if (profile.avatar_url && failedUrl !== profile.avatar_url) {
+    return (
+      <span className="author-avatar author-avatar-image">
+        <img
+          src={profile.avatar_url}
+          alt={`Аватар автора ${profile.display_name}`}
+          onError={() => setFailedUrl(profile.avatar_url)}
+        />
+      </span>
+    );
+  }
+
+  return (
+    <span className="author-avatar" aria-hidden="true">
+      {initials(profile.display_name)}
+    </span>
+  );
 }
 
-export default function AuthorProfile({ state, onUpload }) {
+export default function AuthorProfile({
+  state,
+  onCreate,
+  onEdit,
+  onUpload,
+}) {
   if (state.status === 'loading') {
     return (
       <section className="author-profile author-profile-loading" role="status">
@@ -37,9 +60,6 @@ export default function AuthorProfile({ state, onUpload }) {
           <h2 id="public-reader-title">Публичный каталог</h2>
           <p>Для просмотра общедоступных книг вход не требуется.</p>
         </div>
-        <button className="author-profile-button author-profile-button-primary" type="button">
-          Создать профиль автора
-        </button>
       </section>
     );
   }
@@ -51,10 +71,14 @@ export default function AuthorProfile({ state, onUpload }) {
         <div className="author-profile-copy">
           <p className="section-kicker">Профиль читателя</p>
           <h2 id="reader-profile-title">Профиль автора не создан</h2>
-          <p>Библиотека и публичный каталог остаются доступны.</p>
+          <p>Создайте его, чтобы публиковать собственные материалы.</p>
         </div>
-        <button className="author-profile-button author-profile-button-primary" type="button">
-          Создать профиль автора
+        <button
+          className="author-profile-button author-profile-button-primary"
+          type="button"
+          onClick={onCreate}
+        >
+          Стать автором
         </button>
       </section>
     );
@@ -77,16 +101,22 @@ export default function AuthorProfile({ state, onUpload }) {
 
   return (
     <section className="author-profile" aria-labelledby="author-profile-title">
-      <span className="author-avatar" aria-hidden="true">{avatarLabel(profile)}</span>
+      <ProfileAvatar profile={profile} />
       <div className="author-profile-copy">
         <p className="section-kicker">Ваш профиль автора</p>
         <h2 id="author-profile-title">{profile.display_name}</h2>
-        <p>{profile.bio}</p>
+        {profile.bio && <p>{profile.bio}</p>}
       </div>
       <div className="author-profile-actions">
-        <button className="author-profile-button" type="button">
+        <button className="author-profile-button" type="button" onClick={onEdit}>
           Редактировать профиль
         </button>
+        <Link
+          className="author-profile-button author-profile-link"
+          to={`/knowledge/authors/${profile.id}`}
+        >
+          Открыть публичный профиль
+        </Link>
         <button
           className="author-profile-button author-profile-button-primary"
           type="button"
