@@ -1,6 +1,13 @@
 from django.contrib import admin
 
-from .models import Book, KnowledgeProfile, UserLibraryBook
+from .models import (
+    Article,
+    ArticleImage,
+    ArticleImageUploadSession,
+    Book,
+    KnowledgeProfile,
+    UserLibraryBook,
+)
 
 
 # Профили авторов материалов
@@ -53,3 +60,29 @@ class UserLibraryBookAdmin(admin.ModelAdmin):
     readonly_fields = ("added_at", "updated_at")
     raw_id_fields = ("user", "book")
     ordering = ("-updated_at",)
+
+
+@admin.register(Article)
+class ArticleAdmin(admin.ModelAdmin):
+    list_display = ("title", "visibility", "created_by", "created_at")
+    list_filter = ("visibility",)
+    search_fields = ("title", "body", "created_by__email")
+    readonly_fields = ("id", "created_at", "updated_at")
+    raw_id_fields = ("created_by",)
+    ordering = ("-created_at",)
+
+
+@admin.register(ArticleImageUploadSession)
+class ArticleImageUploadSessionAdmin(admin.ModelAdmin):
+    list_display = ("id", "user", "article", "created_at")
+    readonly_fields = ("id", "created_at")
+    raw_id_fields = ("user", "article")
+    ordering = ("-created_at",)
+
+
+@admin.register(ArticleImage)
+class ArticleImageAdmin(admin.ModelAdmin):
+    list_display = ("id", "upload_session", "content_type", "created_at")
+    readonly_fields = ("id", "created_at")
+    raw_id_fields = ("upload_session",)
+    ordering = ("-created_at",)

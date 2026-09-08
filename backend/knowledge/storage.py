@@ -9,6 +9,20 @@ from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile, File
 from django.core.files.storage import FileSystemStorage
 
+IMAGE_EXTENSIONS = {
+    "image/gif": "gif",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "image/webp": "webp",
+}
+
+
+def _image_extension(media_type, subject):
+    try:
+        return IMAGE_EXTENSIONS[media_type]
+    except KeyError as error:
+        raise ValueError(f"Unsupported {subject} image type.") from error
+
 
 def book_storage_key(book_id, book_format):
     """Строит canonical storage key без пользовательского имени файла."""
@@ -31,16 +45,7 @@ def book_cover_storage_key(book_id, media_type, cover_id=None):
     except (TypeError, ValueError, AttributeError) as error:
         raise ValueError("Book and cover ids must be valid UUIDs.") from error
 
-    extensions = {
-        "image/gif": "gif",
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-    }
-    try:
-        extension = extensions[media_type]
-    except KeyError as error:
-        raise ValueError("Unsupported cover image type.") from error
+    extension = _image_extension(media_type, "cover")
 
     return f"books/{normalized_id}/covers/{normalized_cover_id}.{extension}"
 
@@ -53,19 +58,25 @@ def profile_avatar_storage_key(profile_id, media_type, avatar_id=None):
     except (TypeError, ValueError, AttributeError) as error:
         raise ValueError("Profile and avatar ids must be valid UUIDs.") from error
 
-    extensions = {
-        "image/gif": "gif",
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/webp": "webp",
-    }
-    try:
-        extension = extensions[media_type]
-    except KeyError as error:
-        raise ValueError("Unsupported avatar image type.") from error
+    extension = _image_extension(media_type, "avatar")
 
     return (
         f"profiles/{normalized_profile_id}/avatars/{normalized_avatar_id}.{extension}"
+    )
+
+
+def article_image_storage_key(session_id, media_type, image_id=None):
+    """Строит ключ изображения независимо от исходного имени файла."""
+    try:
+        normalized_session_id = UUID(str(session_id))
+        normalized_image_id = UUID(str(image_id)) if image_id else uuid4()
+    except (TypeError, ValueError, AttributeError) as error:
+        raise ValueError("Session and image ids must be valid UUIDs.") from error
+
+    extension = _image_extension(media_type, "article")
+    return (
+        f"articles/uploads/{normalized_session_id}/images/"
+        f"{normalized_image_id}.{extension}"
     )
 
 
@@ -109,7 +120,7 @@ class LocalKnowledgeStorage:
             allow_overwrite=True,
         )
 
-    def save(self, key, content):
+    def save(self, key, content, *, content_type=None):
         key = _validate_key(key)
         if isinstance(content, (bytes, bytearray)):
             content = ContentFile(bytes(content))
@@ -158,7 +169,7 @@ class S3KnowledgeStorage:
         self._client = client
         self._presign_client = presign_client
 
-    def save(self, key, content):
+    def save(self, key, content, *, content_type=None):
         key = _validate_key(key)
         if isinstance(content, bytearray):
             content = bytes(content)
@@ -168,10 +179,15 @@ class S3KnowledgeStorage:
         if hasattr(content, "seek"):
             content.seek(0)
 
+        request = {
+            "Bucket": self.bucket_name,
+            "Key": key,
+            "Body": content,
+        }
+        if content_type:
+            request["ContentType"] = content_type
         self._client.put_object(
-            Bucket=self.bucket_name,
-            Key=key,
-            Body=content,
+            **request,
         )
         return key
 

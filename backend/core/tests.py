@@ -64,6 +64,27 @@ class DocumentationTests(SimpleTestCase):
             "/api/knowledge/authors/{profile_uuid}/books/": {
                 "get": "knowledge_author_books_list"
             },
+            "/api/knowledge/articles/": {
+                "get": "knowledge_articles_list",
+                "post": "knowledge_articles_create",
+            },
+            "/api/knowledge/articles/{article_uuid}/": {
+                "get": "knowledge_articles_retrieve",
+                "patch": "knowledge_articles_update",
+                "delete": "knowledge_articles_delete",
+            },
+            "/api/knowledge/articles/upload-sessions/": {
+                "post": "knowledge_article_upload_sessions_create"
+            },
+            "/api/knowledge/articles/upload-sessions/{session_uuid}/images/": {
+                "post": "knowledge_article_images_upload"
+            },
+            "/api/knowledge/article-images/{image_uuid}/": {
+                "get": "knowledge_article_images_retrieve"
+            },
+            "/api/knowledge/authors/{profile_uuid}/articles/": {
+                "get": "knowledge_author_articles_list"
+            },
         }
 
         operation_ids = []
@@ -90,6 +111,14 @@ class DocumentationTests(SimpleTestCase):
             ("/api/knowledge/profile/", "post"),
             ("/api/knowledge/profile/", "patch"),
             ("/api/knowledge/profile/avatar/", "delete"),
+            ("/api/knowledge/articles/", "post"),
+            ("/api/knowledge/articles/{article_uuid}/", "patch"),
+            ("/api/knowledge/articles/{article_uuid}/", "delete"),
+            ("/api/knowledge/articles/upload-sessions/", "post"),
+            (
+                "/api/knowledge/articles/upload-sessions/{session_uuid}/images/",
+                "post",
+            ),
         }
 
         for path, methods in schema["paths"].items():
@@ -152,6 +181,27 @@ class DocumentationTests(SimpleTestCase):
                 request_schema["properties"]["avatar"],
                 {"type": "string", "format": "binary"},
             )
+
+    def test_article_schema_keeps_storage_private(self):
+        schema = self.schema()
+        article = schema["components"]["schemas"]["Article"]
+        image = schema["components"]["schemas"]["ArticleImage"]
+
+        self.assertIn("body", article["properties"])
+        self.assertIn("can_edit", article["properties"])
+        self.assertNotIn("created_by", article["properties"])
+        self.assertEqual(
+            set(image["properties"]),
+            {"id", "url", "content_type", "created_at"},
+        )
+        self.assertNotIn("format", image["properties"]["url"])
+        self.assertNotIn("storage_key", image["properties"])
+
+        upload = schema["paths"][
+            "/api/knowledge/articles/upload-sessions/{session_uuid}/images/"
+        ]["post"]
+        content = upload["requestBody"]["content"]
+        self.assertEqual(set(content), {"multipart/form-data"})
 
     def test_swagger_uses_openpage_template_and_static(self):
         response = self.client.get(reverse("swagger-ui"))

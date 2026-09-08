@@ -214,6 +214,38 @@ describe('авторизация и маршруты', () => {
     expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
   });
 
+  it('оставляет public article route доступным анонимному пользователю', async () => {
+    const articleId = 'eb56e24a-6c4c-4dbf-903c-768df56e1ed4';
+    mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+      [`/api/knowledge/articles/${articleId}/`]: () => Promise.resolve(jsonResponse({
+        id: articleId,
+        title: 'Публичная статья',
+        body: '# Содержимое',
+        visibility: 'public',
+        author: null,
+        can_edit: false,
+        created_at: '2026-09-08T12:00:00Z',
+        updated_at: '2026-09-08T12:00:00Z',
+      })),
+    });
+
+    renderApp(`/knowledge/articles/${articleId}`);
+
+    expect(await screen.findByRole('heading', { name: 'Публичная статья' }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Содержимое' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
+  });
+
+  it('защищает route нового article editor авторизацией', async () => {
+    mockApi({ '/api/auth/refresh/': anonymousRefresh });
+
+    renderApp('/knowledge/articles/new');
+
+    expect(await screen.findByRole('heading', { name: 'Войти' })).toBeInTheDocument();
+  });
+
   it('оставляет public author route доступным анонимному пользователю', async () => {
     const publicId = '9a7c27e5-c9d4-428f-bc28-7ebaf83088cf';
     const fetchMock = mockApi({
@@ -225,6 +257,12 @@ describe('авторизация и маршруты', () => {
         avatar_url: null,
       })),
       [`/api/knowledge/authors/${publicId}/books/`]: () => Promise.resolve(jsonResponse({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
+      })),
+      [`/api/knowledge/authors/${publicId}/articles/`]: () => Promise.resolve(jsonResponse({
         count: 0,
         next: null,
         previous: null,

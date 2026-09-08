@@ -1,5 +1,13 @@
 from django.urls import path
 
+from .article_views import (
+    ArticleDetailView,
+    ArticleImageUploadView,
+    ArticleImageView,
+    ArticleListView,
+    ArticleUploadSessionView,
+    PublicAuthorArticlesView,
+)
 from .views import (
     BookContentView,
     BookDetailView,
@@ -15,6 +23,27 @@ from .views import (
 )
 
 urlpatterns = [
+    path("articles/", ArticleListView.as_view(), name="knowledge_articles"),
+    path(
+        "articles/upload-sessions/",
+        ArticleUploadSessionView.as_view(),
+        name="knowledge_article_upload_sessions",
+    ),
+    path(
+        "articles/upload-sessions/<uuid:session_uuid>/images/",
+        ArticleImageUploadView.as_view(),
+        name="knowledge_article_image_upload",
+    ),
+    path(
+        "articles/<uuid:article_uuid>/",
+        ArticleDetailView.as_view(),
+        name="knowledge_article_detail",
+    ),
+    path(
+        "article-images/<uuid:image_uuid>/",
+        ArticleImageView.as_view(),
+        name="knowledge_article_image",
+    ),
     path("books/", BookListView.as_view(), name="knowledge_books"),
     path(
         "books/preview/",
@@ -57,5 +86,10 @@ urlpatterns = [
         "authors/<uuid:profile_uuid>/books/",
         PublicAuthorBooksView.as_view(),
         name="knowledge_author_books",
+    ),
+    path(
+        "authors/<uuid:profile_uuid>/articles/",
+        PublicAuthorArticlesView.as_view(),
+        name="knowledge_author_articles",
     ),
 ]

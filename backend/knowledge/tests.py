@@ -16,6 +16,7 @@ from .services import create_book
 from .storage import (
     LocalKnowledgeStorage,
     S3KnowledgeStorage,
+    article_image_storage_key,
     book_storage_key,
     get_knowledge_storage,
 )
@@ -38,11 +39,13 @@ class FailingAfterSaveStorage(TrackingLocalKnowledgeStorage):
 class InMemoryS3Client:
     def __init__(self):
         self.objects = {}
+        self.content_types = {}
         self.presign_calls = []
 
-    def put_object(self, *, Bucket, Key, Body):
+    def put_object(self, *, Bucket, Key, Body, ContentType=None):
         content = Body if isinstance(Body, bytes) else Body.read()
         self.objects[(Bucket, Key)] = content
+        self.content_types[(Bucket, Key)] = ContentType
 
     def get_object(self, *, Bucket, Key):
         return {"Body": BytesIO(self.objects[(Bucket, Key)])}
@@ -230,6 +233,19 @@ class S3KnowledgeStorageTests(SimpleTestCase):
                 )
             ],
         )
+
+    def test_saves_article_image_content_type(self):
+        client = InMemoryS3Client()
+        storage = S3KnowledgeStorage(
+            client=client,
+            presign_client=client,
+            bucket_name="knowledge-test",
+        )
+        key = article_image_storage_key(uuid.uuid4(), "image/png")
+
+        storage.save(key, b"png content", content_type="image/png")
+
+        self.assertEqual(client.content_types[("knowledge-test", key)], "image/png")
 
     @override_settings(
         S3_ENDPOINT_URL="http://minio:9000",

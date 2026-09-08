@@ -8,6 +8,8 @@ import {
 import ProtectedRoute, { SessionLoading } from './auth/ProtectedRoute.jsx';
 import useAuth from './auth/useAuth.js';
 import HubPage from './pages/hub/HubPage.jsx';
+import ArticleEditorPage from './pages/knowledge/ArticleEditorPage.jsx';
+import ArticlePage from './pages/knowledge/ArticlePage.jsx';
 import KnowledgePage from './pages/knowledge/KnowledgePage.jsx';
 import PublicAuthorPage from './pages/knowledge/PublicAuthorPage.jsx';
 import ReaderPage from './pages/knowledge/ReaderPage.jsx';
@@ -35,6 +37,23 @@ export default function App() {
       <Route path="/hub" element={<HubPage />} />
       <Route path="/knowledge" element={<KnowledgePage />} />
       <Route path="/knowledge/authors/:publicId" element={<PublicAuthorPage />} />
+      <Route path="/knowledge/articles/:id" element={<ArticlePage />} />
+      <Route
+        path="/knowledge/articles/new"
+        element={(
+          <ProtectedRoute>
+            <ArticleEditorPage mode="create" />
+          </ProtectedRoute>
+        )}
+      />
+      <Route
+        path="/knowledge/articles/:id/edit"
+        element={(
+          <ProtectedRoute>
+            <ArticleEditorPage mode="edit" />
+          </ProtectedRoute>
+        )}
+      />
       <Route path="/knowledge/books/:id/read" element={<ReaderPage />} />
       <Route
         path="/profile"

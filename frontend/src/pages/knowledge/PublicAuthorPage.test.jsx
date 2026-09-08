@@ -33,6 +33,16 @@ const book = {
   visibility: 'public',
   status: 'ready',
 };
+const article = {
+  id: 'eb56e24a-6c4c-4dbf-903c-768df56e1ed4',
+  title: 'Публичная статья автора',
+  body: 'Короткий текст статьи.',
+  visibility: 'public',
+  author,
+  can_edit: false,
+  created_at: '2026-09-08T12:00:00Z',
+  updated_at: '2026-09-08T12:00:00Z',
+};
 
 function page(results, overrides = {}) {
   return {
@@ -51,6 +61,9 @@ function mockAuthorApi(overrides = {}) {
     ),
     [`/api/knowledge/authors/${publicId}/books/`]: () => Promise.resolve(
       jsonResponse(page([book])),
+    ),
+    [`/api/knowledge/authors/${publicId}/articles/`]: () => Promise.resolve(
+      jsonResponse(page([article])),
     ),
     ...overrides,
   };
@@ -102,10 +115,13 @@ describe('PublicAuthorPage', () => {
     expect(within(card).getByText(book.publisher)).toBeInTheDocument();
     expect(within(card).getByRole('link', { name: 'Читать' }))
       .toHaveAttribute('href', `/knowledge/books/${book.id}/read`);
+    expect(screen.getByRole('heading', { name: article.title })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: `Читать «${article.title}»` }))
+      .toHaveAttribute('href', `/knowledge/articles/${article.id}`);
     expect(screen.queryByRole('button', { name: 'Редактировать профиль' }))
       .not.toBeInTheDocument();
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
     for (const [, options] of fetchMock.mock.calls) {
       expect(options.headers).toBeUndefined();
     }
@@ -164,6 +180,30 @@ describe('PublicAuthorPage', () => {
     expect(screen.getByRole('heading', { name: author.display_name })).toBeInTheDocument();
   });
 
+  it('показывает независимые empty и error states статей автора', async () => {
+    const articlesPath = `/api/knowledge/authors/${publicId}/articles/`;
+    mockAuthorApi({
+      [articlesPath]: () => Promise.resolve(jsonResponse(page([]))),
+    });
+    const emptyRender = renderPage();
+
+    expect(await screen.findByRole('heading', {
+      name: 'У автора пока нет публичных статей.',
+    })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: book.title })).toBeInTheDocument();
+
+    emptyRender.unmount();
+    mockAuthorApi({
+      [articlesPath]: () => Promise.resolve(jsonResponse({ detail: 'Ошибка' }, 500)),
+    });
+    renderPage();
+
+    expect(await screen.findByRole('heading', {
+      name: 'Не удалось загрузить статьи автора.',
+    })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: book.title })).toBeInTheDocument();
+  });
+
   it('переключает страницы кнопками Назад и Далее', async () => {
     const firstPath = `/api/knowledge/authors/${publicId}/books/`;
     const secondPath = `${firstPath}?page=2`;
@@ -189,6 +229,38 @@ describe('PublicAuthorPage', () => {
     expect(await screen.findByRole('heading', { name: book.title })).toBeInTheDocument();
     expect(firstHandler).toHaveBeenCalledTimes(2);
     expect(secondHandler).toHaveBeenCalledTimes(1);
+  });
+
+  it('переключает pagination статей независимо от книг', async () => {
+    const firstPath = `/api/knowledge/authors/${publicId}/articles/`;
+    const secondPath = `${firstPath}?page=2`;
+    const secondArticle = {
+      ...article,
+      id: '2472e136-d016-472a-95bc-0e0bff970cc7',
+      title: 'Вторая страница статей',
+    };
+    const firstHandler = vi.fn(() => Promise.resolve(jsonResponse(page([article], {
+      count: 2,
+      next: `https://example.test${secondPath}`,
+    }))));
+    const secondHandler = vi.fn(() => Promise.resolve(jsonResponse(page([secondArticle], {
+      count: 2,
+      previous: `https://example.test${firstPath}`,
+    }))));
+    mockAuthorApi({ [firstPath]: firstHandler, [secondPath]: secondHandler });
+    const browser = userEvent.setup();
+    renderPage();
+
+    const articleNavigation = await screen.findByRole('navigation', {
+      name: 'Страницы статей автора',
+    });
+    await browser.click(within(articleNavigation).getByRole('button', { name: 'Далее' }));
+
+    expect(await screen.findByRole('heading', { name: secondArticle.title }))
+      .toBeInTheDocument();
+    expect(firstHandler).toHaveBeenCalledTimes(1);
+    expect(secondHandler).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('heading', { name: book.title })).toBeInTheDocument();
   });
 
   it('не ломается от can_edit=true без owner controls на публичной странице', async () => {

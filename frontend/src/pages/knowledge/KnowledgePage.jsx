@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 
 import {
   addBookToLibrary,
+  getKnowledgeArticles,
   getKnowledgeBooks,
   getKnowledgeLibrary,
   getKnowledgeProfile,
@@ -11,15 +12,22 @@ import useAuth from '../../auth/useAuth.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
 import AuthorProfile from './AuthorProfile.jsx';
 import AuthorProfileDialog from './AuthorProfileDialog.jsx';
+import ArticleCard from './ArticleCard.jsx';
 import BookCard from './BookCard.jsx';
 import BookEditDialog from './BookEditDialog.jsx';
 import BookUploadDialog from './BookUploadDialog.jsx';
 
-const articleCards = ['Рабочие заметки', 'Полезная подборка', 'Новая идея'];
-
 const initialCollectionState = {
   status: 'loading',
   items: [],
+};
+
+const initialArticlesState = {
+  status: 'loading',
+  items: [],
+  count: 0,
+  next: null,
+  previous: null,
 };
 
 function CatalogBookAction({
@@ -220,7 +228,65 @@ function BooksView({
   );
 }
 
-function ArticlesView() {
+function ArticlesView({ profileState }) {
+  const [articlesState, setArticlesState] = useState(initialArticlesState);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    let isActive = true;
+    setArticlesState(initialArticlesState);
+
+    getKnowledgeArticles(page)
+      .then((data) => {
+        if (!isActive) return;
+        setArticlesState({
+          status: 'success',
+          items: data.results,
+          count: data.count,
+          next: data.next,
+          previous: data.previous,
+        });
+      })
+      .catch(() => {
+        if (isActive) setArticlesState({ ...initialArticlesState, status: 'error' });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [page]);
+
+  let content;
+  if (articlesState.status === 'loading') {
+    content = (
+      <div className="knowledge-message" role="status">
+        <h3>Загружаем статьи…</h3>
+      </div>
+    );
+  } else if (articlesState.status === 'error') {
+    content = (
+      <div className="knowledge-message" role="alert">
+        <h3>Не удалось загрузить статьи.</h3>
+        <p>Попробуйте открыть раздел немного позже.</p>
+      </div>
+    );
+  } else if (articlesState.items.length === 0) {
+    content = (
+      <div className="knowledge-message">
+        <h3>Публичных статей пока нет.</h3>
+        <p>Здесь появятся новые тексты авторов Базы знаний.</p>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="article-grid">
+        {articlesState.items.map((article) => (
+          <ArticleCard article={article} key={article.id} />
+        ))}
+      </div>
+    );
+  }
+
   return (
     <section className="knowledge-catalog articles-catalog" aria-labelledby="articles-title">
       <div className="knowledge-section-heading">
@@ -228,31 +294,45 @@ function ArticlesView() {
           <p className="section-kicker">Публикации</p>
           <h2 id="articles-title">Статьи</h2>
         </div>
-        <p>Место для будущих текстов и подборок.</p>
+        {profileState.status === 'exists' ? (
+          <Link className="article-create-link" to="/knowledge/articles/new">
+            Написать статью
+          </Link>
+        ) : (
+          <p>Тексты и подборки авторов сообщества.</p>
+        )}
       </div>
-
-      <div className="article-grid">
-        {articleCards.map((title, index) => (
-          <article className="article-card" key={title}>
-            <div className="article-card-mark" aria-hidden="true">0{index + 1}</div>
-            <div>
-              <p>Будущая статья</p>
-              <h3>{title}</h3>
-              <span>Здесь появятся описание и метаданные материала.</span>
-            </div>
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path d="m7 4 6 6-6 6" />
-            </svg>
-          </article>
-        ))}
-      </div>
+      {content}
+      {articlesState.status === 'success'
+        && (articlesState.next || articlesState.previous) && (
+          <nav className="knowledge-pagination" aria-label="Страницы статей">
+            <button
+              type="button"
+              disabled={!articlesState.previous}
+              onClick={() => setPage((current) => current - 1)}
+            >
+              Назад
+            </button>
+            <span>Страница {page}</span>
+            <button
+              type="button"
+              disabled={!articlesState.next}
+              onClick={() => setPage((current) => current + 1)}
+            >
+              Далее
+            </button>
+          </nav>
+        )}
     </section>
   );
 }
 
 export default function KnowledgePage() {
   const { status: authStatus } = useAuth();
-  const [mode, setMode] = useState('books');
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState(
+    searchParams.get('tab') === 'articles' ? 'articles' : 'books',
+  );
   const [booksState, setBooksState] = useState(initialCollectionState);
   const [libraryState, setLibraryState] = useState(initialCollectionState);
   const [profileState, setProfileState] = useState({ status: 'loading', profile: null });
@@ -423,7 +503,7 @@ export default function KnowledgePage() {
               onOpenUpload={() => setIsUploadOpen(true)}
             />
           ) : (
-            <ArticlesView />
+            <ArticlesView profileState={profileState} />
           )}
         </div>
       </div>

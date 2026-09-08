@@ -3,10 +3,12 @@ import { Link, useParams } from 'react-router-dom';
 
 import {
   getKnowledgeAuthor,
+  getKnowledgeAuthorArticles,
   getKnowledgeAuthorBooks,
 } from '../../api/knowledge.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
 import { ProfileAvatar } from './AuthorProfile.jsx';
+import ArticleCard from './ArticleCard.jsx';
 import BookCard from './BookCard.jsx';
 
 const initialAuthorState = { status: 'loading', author: null };
@@ -18,11 +20,37 @@ const initialBooksState = {
   previous: null,
 };
 
+function CollectionPagination({ label, page, state, onPageChange }) {
+  if (!state.next && !state.previous) return null;
+
+  return (
+    <nav className="knowledge-pagination" aria-label={label}>
+      <button
+        type="button"
+        disabled={!state.previous}
+        onClick={() => onPageChange(page - 1)}
+      >
+        Назад
+      </button>
+      <span>Страница {page}</span>
+      <button
+        type="button"
+        disabled={!state.next}
+        onClick={() => onPageChange(page + 1)}
+      >
+        Далее
+      </button>
+    </nav>
+  );
+}
+
 export default function PublicAuthorPage() {
   const { publicId } = useParams();
   const [authorState, setAuthorState] = useState(initialAuthorState);
   const [booksState, setBooksState] = useState(initialBooksState);
-  const [page, setPage] = useState(1);
+  const [articlesState, setArticlesState] = useState(initialBooksState);
+  const [booksPage, setBooksPage] = useState(1);
+  const [articlesPage, setArticlesPage] = useState(1);
 
   useEffect(() => {
     let isActive = true;
@@ -49,7 +77,7 @@ export default function PublicAuthorPage() {
     let isActive = true;
     setBooksState(initialBooksState);
 
-    getKnowledgeAuthorBooks(publicId, page)
+    getKnowledgeAuthorBooks(publicId, booksPage)
       .then((data) => {
         if (!isActive) return;
         setBooksState({
@@ -67,7 +95,31 @@ export default function PublicAuthorPage() {
     return () => {
       isActive = false;
     };
-  }, [page, publicId]);
+  }, [booksPage, publicId]);
+
+  useEffect(() => {
+    let isActive = true;
+    setArticlesState(initialBooksState);
+
+    getKnowledgeAuthorArticles(publicId, articlesPage)
+      .then((data) => {
+        if (!isActive) return;
+        setArticlesState({
+          status: 'success',
+          items: data.results,
+          count: data.count,
+          next: data.next,
+          previous: data.previous,
+        });
+      })
+      .catch(() => {
+        if (isActive) setArticlesState({ ...initialBooksState, status: 'error' });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [articlesPage, publicId]);
 
   let authorContent;
   if (authorState.status === 'loading') {
@@ -101,6 +153,36 @@ export default function PublicAuthorPage() {
           {author.bio && <p>{author.bio}</p>}
         </div>
       </header>
+    );
+  }
+
+  let articlesContent;
+  if (articlesState.status === 'loading') {
+    articlesContent = (
+      <div className="knowledge-message" role="status">
+        <h3>Загружаем статьи…</h3>
+      </div>
+    );
+  } else if (articlesState.status === 'error') {
+    articlesContent = (
+      <div className="knowledge-message" role="alert">
+        <h3>Не удалось загрузить статьи автора.</h3>
+        <p>Попробуйте открыть раздел немного позже.</p>
+      </div>
+    );
+  } else if (articlesState.items.length === 0) {
+    articlesContent = (
+      <div className="knowledge-message">
+        <h3>У автора пока нет публичных статей.</h3>
+      </div>
+    );
+  } else {
+    articlesContent = (
+      <div className="article-grid">
+        {articlesState.items.map((article) => (
+          <ArticleCard article={article} key={article.id} />
+        ))}
+      </div>
     );
   }
 
@@ -149,24 +231,34 @@ export default function PublicAuthorPage() {
                 <p>{booksState.status === 'success' ? `${booksState.count} книг` : ''}</p>
               </div>
               {booksContent}
-              {booksState.status === 'success' && (booksState.next || booksState.previous) && (
-                <nav className="knowledge-pagination" aria-label="Страницы книг автора">
-                  <button
-                    type="button"
-                    disabled={!booksState.previous}
-                    onClick={() => setPage((current) => current - 1)}
-                  >
-                    Назад
-                  </button>
-                  <span>Страница {page}</span>
-                  <button
-                    type="button"
-                    disabled={!booksState.next}
-                    onClick={() => setPage((current) => current + 1)}
-                  >
-                    Далее
-                  </button>
-                </nav>
+              {booksState.status === 'success' && (
+                <CollectionPagination
+                  label="Страницы книг автора"
+                  page={booksPage}
+                  state={booksState}
+                  onPageChange={setBooksPage}
+                />
+              )}
+            </section>
+          )}
+
+          {authorState.status === 'success' && (
+            <section className="knowledge-catalog author-articles" aria-labelledby="author-articles-title">
+              <div className="knowledge-section-heading">
+                <div>
+                  <p className="section-kicker">Тексты автора</p>
+                  <h2 id="author-articles-title">Публичные статьи</h2>
+                </div>
+                <p>{articlesState.status === 'success' ? `${articlesState.count} статей` : ''}</p>
+              </div>
+              {articlesContent}
+              {articlesState.status === 'success' && (
+                <CollectionPagination
+                  label="Страницы статей автора"
+                  page={articlesPage}
+                  state={articlesState}
+                  onPageChange={setArticlesPage}
+                />
               )}
             </section>
           )}

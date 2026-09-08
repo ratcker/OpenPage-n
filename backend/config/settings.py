@@ -113,6 +113,9 @@ S3_REGION_NAME = os.environ.get("S3_REGION_NAME", "us-east-1")
 KNOWLEDGE_CONTENT_URL_TTL_SECONDS = int(
     os.environ.get("KNOWLEDGE_CONTENT_URL_TTL_SECONDS", "300")
 )
+KNOWLEDGE_ARTICLE_UPLOAD_TTL_SECONDS = int(
+    os.environ.get("KNOWLEDGE_ARTICLE_UPLOAD_TTL_SECONDS", "86400")
+)
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

@@ -146,3 +146,86 @@ class UserLibraryBook(models.Model):
 
     def __str__(self):
         return f"{self.user.email}: {self.book.title}"
+
+
+# Markdown хранится как исходный текст и обрабатывается только на клиенте.
+class Article(models.Model):
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", "Public"
+        PRIVATE = "private", "Private"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=255)
+    body = models.TextField()
+    visibility = models.CharField(
+        max_length=7,
+        choices=Visibility.choices,
+        default=Visibility.PRIVATE,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="knowledge_articles",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "article"
+        verbose_name_plural = "articles"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(visibility__in=("public", "private")),
+                name="knowledge_article_visibility_valid",
+            )
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+# Сессия позволяет загрузить изображения до появления самой статьи.
+class ArticleImageUploadSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="knowledge_article_upload_sessions",
+    )
+    article = models.ForeignKey(
+        Article,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="image_upload_sessions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "article image upload session"
+        verbose_name_plural = "article image upload sessions"
+
+    def __str__(self):
+        return str(self.id)
+
+
+class ArticleImage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    upload_session = models.ForeignKey(
+        ArticleImageUploadSession,
+        on_delete=models.CASCADE,
+        related_name="images",
+    )
+    storage_key = models.CharField(max_length=500, unique=True)
+    content_type = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
+        verbose_name = "article image"
+        verbose_name_plural = "article images"
+
+    def __str__(self):
+        return str(self.id)

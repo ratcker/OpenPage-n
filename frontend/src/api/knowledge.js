@@ -52,6 +52,16 @@ export function getKnowledgeAuthorBooks(publicId, page) {
   return request(`${KNOWLEDGE_URL}/authors/${publicId}/books/${query}`);
 }
 
+export function getKnowledgeArticles(page) {
+  const query = page && page > 1 ? `?page=${page}` : '';
+  return request(`${KNOWLEDGE_URL}/articles/${query}`);
+}
+
+export function getKnowledgeAuthorArticles(publicId, page) {
+  const query = page && page > 1 ? `?page=${page}` : '';
+  return request(`${KNOWLEDGE_URL}/authors/${publicId}/articles/${query}`);
+}
+
 function readerRequest(path, authenticated) {
   return authenticated ? authorizedRequest(path) : request(path);
 }
@@ -62,6 +72,48 @@ export function getKnowledgeBook(bookId, authenticated = false) {
 
 export function getKnowledgeBookContent(bookId, authenticated = false) {
   return readerRequest(`${KNOWLEDGE_URL}/books/${bookId}/content/`, authenticated);
+}
+
+export function getKnowledgeArticle(articleId, authenticated = false) {
+  return readerRequest(`${KNOWLEDGE_URL}/articles/${articleId}/`, authenticated);
+}
+
+export function createKnowledgeArticle(data) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/articles/`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateKnowledgeArticle(articleId, data) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/articles/${articleId}/`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteKnowledgeArticle(articleId) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/articles/${articleId}/`, {
+    method: 'DELETE',
+  });
+}
+
+export function createArticleUploadSession() {
+  return authorizedRequest(`${KNOWLEDGE_URL}/articles/upload-sessions/`, {
+    method: 'POST',
+  });
+}
+
+export function uploadArticleSessionImage(sessionId, file) {
+  const body = new FormData();
+  body.append('image', file);
+
+  return authorizedRequest(
+    `${KNOWLEDGE_URL}/articles/upload-sessions/${sessionId}/images/`,
+    { method: 'POST', body },
+  );
 }
 
 export function updateKnowledgeProgress(bookId, data) {
