@@ -122,6 +122,37 @@ class ArticleListView(GenericAPIView):
         )
 
 
+class MyArticleListView(GenericAPIView):
+    permission_classes = (IsAuthenticated,)
+    pagination_class = KnowledgePagination
+    serializer_class = ArticleSerializer
+
+    @extend_schema(
+        operation_id="knowledge_articles_mine_list",
+        summary="Получить свои статьи",
+        description="Возвращает публичные и приватные статьи текущего автора.",
+        tags=[KNOWLEDGE_TAG],
+        responses={
+            200: ArticleSerializer(many=True),
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            403: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="У пользователя нет KnowledgeProfile.",
+            ),
+        },
+    )
+    def get(self, request):
+        _require_author_profile(request.user)
+        articles = (
+            _article_queryset()
+            .filter(created_by=request.user)
+            .order_by("-created_at", "-id")
+        )
+        page = self.paginate_queryset(articles)
+        serializer = ArticleSerializer(page, many=True, context={"request": request})
+        return self.get_paginated_response(serializer.data)
+
+
 class ArticleDetailView(GenericAPIView):
     permission_classes = (IsAuthenticated,)
     parser_classes = (JSONParser,)

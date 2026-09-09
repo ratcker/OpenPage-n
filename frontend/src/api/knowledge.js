@@ -57,6 +57,11 @@ export function getKnowledgeArticles(page) {
   return request(`${KNOWLEDGE_URL}/articles/${query}`);
 }
 
+export function getMyKnowledgeArticles(page) {
+  const query = page && page > 1 ? `?page=${page}` : '';
+  return authorizedRequest(`${KNOWLEDGE_URL}/articles/mine/${query}`);
+}
+
 export function getKnowledgeAuthorArticles(publicId, page) {
   const query = page && page > 1 ? `?page=${page}` : '';
   return request(`${KNOWLEDGE_URL}/authors/${publicId}/articles/${query}`);

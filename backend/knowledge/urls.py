@@ -6,6 +6,7 @@ from .article_views import (
     ArticleImageView,
     ArticleListView,
     ArticleUploadSessionView,
+    MyArticleListView,
     PublicAuthorArticlesView,
 )
 from .views import (
@@ -24,6 +25,11 @@ from .views import (
 
 urlpatterns = [
     path("articles/", ArticleListView.as_view(), name="knowledge_articles"),
+    path(
+        "articles/mine/",
+        MyArticleListView.as_view(),
+        name="knowledge_articles_mine",
+    ),
     path(
         "articles/upload-sessions/",
         ArticleUploadSessionView.as_view(),

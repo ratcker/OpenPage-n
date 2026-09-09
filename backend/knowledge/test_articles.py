@@ -179,6 +179,61 @@ class ArticleCatalogAPITests(ArticleAPITestCase):
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
 
+class MyArticleListAPITests(ArticleAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.url = reverse("knowledge_articles_mine")
+
+    def test_list_requires_authentication_and_author_profile(self):
+        anonymous = self.client.get(self.url)
+
+        reader = User.objects.create_user(
+            email="reader@example.com",
+            name="Читатель",
+            password="test-password",
+        )
+        self.authenticate(reader)
+        without_profile = self.client.get(self.url)
+
+        self.assertEqual(anonymous.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertEqual(without_profile.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_list_contains_only_own_public_and_private_articles(self):
+        own_public = self.create_article(title="Своя публичная")
+        own_private = self.create_article(
+            title="Своя приватная",
+            visibility=Article.Visibility.PRIVATE,
+        )
+        foreign_public = self.create_article(user=self.other_user)
+        foreign_private = self.create_article(
+            user=self.other_user,
+            visibility=Article.Visibility.PRIVATE,
+        )
+        self.authenticate()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        returned_ids = {item["id"] for item in response.data["results"]}
+        self.assertEqual(returned_ids, {str(own_public.id), str(own_private.id)})
+        self.assertNotIn(str(foreign_public.id), returned_ids)
+        self.assertNotIn(str(foreign_private.id), returned_ids)
+        self.assertTrue(all(item["can_edit"] for item in response.data["results"]))
+
+    def test_list_is_paginated_newest_first(self):
+        articles = [self.create_article(title=f"Статья {index}") for index in range(21)]
+        self.authenticate()
+
+        response = self.client.get(self.url)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["count"], 21)
+        self.assertEqual(len(response.data["results"]), 20)
+        self.assertIsNotNone(response.data["next"])
+        self.assertIsNone(response.data["previous"])
+        self.assertEqual(response.data["results"][0]["id"], str(articles[-1].id))
+
+
 class ArticleDetailAPITests(ArticleAPITestCase):
     def article_url(self, article):
         return reverse(

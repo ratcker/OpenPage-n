@@ -41,6 +41,9 @@ export default function ArticleCard({ article }) {
             <span>{author?.display_name || 'Автор не указан'}</span>
           )}
           {article.created_at && <time>{formatArticleDate(article.created_at)}</time>}
+          {article.visibility === 'private' && (
+            <span className="article-visibility">Приватная</span>
+          )}
         </div>
         <h3><Link to={articleUrl}>{article.title}</Link></h3>
         {excerpt && <p className="article-card-excerpt">{excerpt}</p>}

@@ -68,6 +68,7 @@ class DocumentationTests(SimpleTestCase):
                 "get": "knowledge_articles_list",
                 "post": "knowledge_articles_create",
             },
+            "/api/knowledge/articles/mine/": {"get": "knowledge_articles_mine_list"},
             "/api/knowledge/articles/{article_uuid}/": {
                 "get": "knowledge_articles_retrieve",
                 "patch": "knowledge_articles_update",
@@ -112,6 +113,7 @@ class DocumentationTests(SimpleTestCase):
             ("/api/knowledge/profile/", "patch"),
             ("/api/knowledge/profile/avatar/", "delete"),
             ("/api/knowledge/articles/", "post"),
+            ("/api/knowledge/articles/mine/", "get"),
             ("/api/knowledge/articles/{article_uuid}/", "patch"),
             ("/api/knowledge/articles/{article_uuid}/", "delete"),
             ("/api/knowledge/articles/upload-sessions/", "post"),

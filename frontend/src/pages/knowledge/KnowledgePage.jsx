@@ -7,6 +7,7 @@ import {
   getKnowledgeBooks,
   getKnowledgeLibrary,
   getKnowledgeProfile,
+  getMyKnowledgeArticles,
 } from '../../api/knowledge.js';
 import useAuth from '../../auth/useAuth.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
@@ -228,9 +229,94 @@ function BooksView({
   );
 }
 
+function ArticleCollection({
+  className = '',
+  id,
+  kicker,
+  title,
+  description,
+  action,
+  state,
+  page,
+  emptyTitle,
+  emptyDescription,
+  errorTitle,
+  onPageChange,
+}) {
+  let content;
+
+  if (state.status === 'loading') {
+    content = (
+      <div className="knowledge-message" role="status">
+        <h3>Загружаем статьи…</h3>
+      </div>
+    );
+  } else if (state.status === 'error') {
+    content = (
+      <div className="knowledge-message" role="alert">
+        <h3>{errorTitle}</h3>
+        <p>Попробуйте открыть раздел немного позже.</p>
+      </div>
+    );
+  } else if (state.items.length === 0) {
+    content = (
+      <div className="knowledge-message">
+        <h3>{emptyTitle}</h3>
+        <p>{emptyDescription}</p>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="article-grid">
+        {state.items.map((article) => (
+          <ArticleCard article={article} key={article.id} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className={`knowledge-catalog articles-catalog ${className}`.trim()}
+      aria-labelledby={id}
+    >
+      <div className="knowledge-section-heading">
+        <div>
+          <p className="section-kicker">{kicker}</p>
+          <h2 id={id}>{title}</h2>
+        </div>
+        {action || <p>{description}</p>}
+      </div>
+      {content}
+      {state.status === 'success' && (state.next || state.previous) && (
+        <nav className="knowledge-pagination" aria-label={`Страницы: ${title}`}>
+          <button
+            type="button"
+            disabled={!state.previous}
+            onClick={() => onPageChange(page - 1)}
+          >
+            Назад
+          </button>
+          <span>Страница {page}</span>
+          <button
+            type="button"
+            disabled={!state.next}
+            onClick={() => onPageChange(page + 1)}
+          >
+            Далее
+          </button>
+        </nav>
+      )}
+    </section>
+  );
+}
+
 function ArticlesView({ profileState }) {
   const [articlesState, setArticlesState] = useState(initialArticlesState);
+  const [myArticlesState, setMyArticlesState] = useState(initialArticlesState);
   const [page, setPage] = useState(1);
+  const [myPage, setMyPage] = useState(1);
+  const hasProfile = profileState.status === 'exists';
 
   useEffect(() => {
     let isActive = true;
@@ -256,74 +342,67 @@ function ArticlesView({ profileState }) {
     };
   }, [page]);
 
-  let content;
-  if (articlesState.status === 'loading') {
-    content = (
-      <div className="knowledge-message" role="status">
-        <h3>Загружаем статьи…</h3>
-      </div>
-    );
-  } else if (articlesState.status === 'error') {
-    content = (
-      <div className="knowledge-message" role="alert">
-        <h3>Не удалось загрузить статьи.</h3>
-        <p>Попробуйте открыть раздел немного позже.</p>
-      </div>
-    );
-  } else if (articlesState.items.length === 0) {
-    content = (
-      <div className="knowledge-message">
-        <h3>Публичных статей пока нет.</h3>
-        <p>Здесь появятся новые тексты авторов Базы знаний.</p>
-      </div>
-    );
-  } else {
-    content = (
-      <div className="article-grid">
-        {articlesState.items.map((article) => (
-          <ArticleCard article={article} key={article.id} />
-        ))}
-      </div>
-    );
-  }
+  useEffect(() => {
+    if (!hasProfile) return undefined;
+
+    let isActive = true;
+    setMyArticlesState(initialArticlesState);
+
+    getMyKnowledgeArticles(myPage)
+      .then((data) => {
+        if (!isActive) return;
+        setMyArticlesState({
+          status: 'success',
+          items: data.results,
+          count: data.count,
+          next: data.next,
+          previous: data.previous,
+        });
+      })
+      .catch(() => {
+        if (isActive) setMyArticlesState({ ...initialArticlesState, status: 'error' });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [hasProfile, myPage]);
 
   return (
-    <section className="knowledge-catalog articles-catalog" aria-labelledby="articles-title">
-      <div className="knowledge-section-heading">
-        <div>
-          <p className="section-kicker">Публикации</p>
-          <h2 id="articles-title">Статьи</h2>
-        </div>
-        {profileState.status === 'exists' ? (
-          <Link className="article-create-link" to="/knowledge/articles/new">
-            Написать статью
-          </Link>
-        ) : (
-          <p>Тексты и подборки авторов сообщества.</p>
-        )}
-      </div>
-      {content}
-      {articlesState.status === 'success'
-        && (articlesState.next || articlesState.previous) && (
-          <nav className="knowledge-pagination" aria-label="Страницы статей">
-            <button
-              type="button"
-              disabled={!articlesState.previous}
-              onClick={() => setPage((current) => current - 1)}
-            >
-              Назад
-            </button>
-            <span>Страница {page}</span>
-            <button
-              type="button"
-              disabled={!articlesState.next}
-              onClick={() => setPage((current) => current + 1)}
-            >
-              Далее
-            </button>
-          </nav>
-        )}
-    </section>
+    <div className={`articles-layout${hasProfile ? ' articles-layout-with-personal' : ''}`}>
+      {hasProfile && (
+        <ArticleCollection
+          className="my-articles"
+          id="my-articles-title"
+          kicker="Личные публикации"
+          title="Ваши статьи"
+          action={(
+            <Link className="article-create-link" to="/knowledge/articles/new">
+              Написать статью
+            </Link>
+          )}
+          state={myArticlesState}
+          page={myPage}
+          emptyTitle="У вас пока нет статей."
+          emptyDescription="Создайте первый материал — приватный или публичный."
+          errorTitle="Не удалось загрузить ваши статьи."
+          onPageChange={setMyPage}
+        />
+      )}
+
+      <ArticleCollection
+        id="articles-title"
+        kicker="Публикации"
+        title="Все статьи"
+        description="Тексты и подборки авторов сообщества."
+        state={articlesState}
+        page={page}
+        emptyTitle="Публичных статей пока нет."
+        emptyDescription="Здесь появятся новые тексты авторов Базы знаний."
+        errorTitle="Не удалось загрузить статьи."
+        onPageChange={setPage}
+      />
+    </div>
   );
 }
 

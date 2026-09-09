@@ -102,6 +102,7 @@ function mockKnowledgeApi(overrides = {}, withSession = true) {
     '/api/knowledge/library/': () => Promise.resolve(jsonResponse(page([libraryItem]))),
     '/api/knowledge/profile/': () => Promise.resolve(jsonResponse(profile)),
     '/api/knowledge/articles/': () => Promise.resolve(jsonResponse(emptyPage)),
+    '/api/knowledge/articles/mine/': () => Promise.resolve(jsonResponse(emptyPage)),
     ...overrides,
   };
   const fetchMock = vi.fn((url, options) => {
@@ -1174,6 +1175,127 @@ describe('KnowledgePage', () => {
     expect(screen.getByText('Страница 2')).toBeInTheDocument();
   });
 
+  it('показывает автору отдельный список своих public и private статей', async () => {
+    const privateArticle = {
+      ...publicArticle,
+      id: 'c80147fc-d76c-462d-b35b-c11282565d64',
+      title: 'Личный черновик',
+      visibility: 'private',
+      can_edit: true,
+    };
+    const fetchMock = mockKnowledgeApi({
+      '/api/knowledge/articles/': () => Promise.resolve(
+        jsonResponse(page([publicArticle])),
+      ),
+      '/api/knowledge/articles/mine/': () => Promise.resolve(
+        jsonResponse(page([privateArticle])),
+      ),
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('tab', { name: 'Статьи' }));
+
+    const personal = await screen.findByRole('region', { name: 'Ваши статьи' });
+    const catalog = screen.getByRole('region', { name: 'Все статьи' });
+    expect(within(personal).getByRole('heading', { name: privateArticle.title }))
+      .toBeInTheDocument();
+    expect(within(personal).getByText('Приватная')).toBeInTheDocument();
+    expect(within(catalog).queryByRole('heading', { name: privateArticle.title }))
+      .not.toBeInTheDocument();
+    expect(within(catalog).getByRole('heading', { name: publicArticle.title }))
+      .toBeInTheDocument();
+
+    const mineCall = fetchMock.mock.calls.find(
+      ([path]) => path === '/api/knowledge/articles/mine/',
+    );
+    expect(mineCall[1].headers).toEqual(expect.objectContaining({
+      Authorization: 'Bearer knowledge-token',
+    }));
+  });
+
+  it('переключает страницы личных и публичных статей независимо', async () => {
+    const secondMineArticle = {
+      ...publicArticle,
+      id: 'e55b9a7c-1941-43f7-9016-5333077d36bd',
+      title: 'Вторая личная статья',
+      can_edit: true,
+    };
+    const secondPublicArticle = {
+      ...publicArticle,
+      id: 'd68634e8-412b-4fc9-8073-89566e359041',
+      title: 'Вторая публичная статья',
+    };
+    const publicSecondPage = vi.fn(() => Promise.resolve(
+      jsonResponse({ ...page([secondPublicArticle]), previous: '/api/knowledge/articles/' }),
+    ));
+    const mineSecondPage = vi.fn(() => Promise.resolve(jsonResponse({
+      ...page([secondMineArticle]),
+      previous: '/api/knowledge/articles/mine/',
+    })));
+    mockKnowledgeApi({
+      '/api/knowledge/articles/': () => Promise.resolve(jsonResponse({
+        ...page([publicArticle]),
+        next: '/api/knowledge/articles/?page=2',
+      })),
+      '/api/knowledge/articles/?page=2': publicSecondPage,
+      '/api/knowledge/articles/mine/': () => Promise.resolve(jsonResponse({
+        ...page([{ ...publicArticle, can_edit: true }]),
+        next: '/api/knowledge/articles/mine/?page=2',
+      })),
+      '/api/knowledge/articles/mine/?page=2': mineSecondPage,
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('tab', { name: 'Статьи' }));
+    const personal = await screen.findByRole('region', { name: 'Ваши статьи' });
+    const catalog = screen.getByRole('region', { name: 'Все статьи' });
+
+    await browser.click(within(personal).getByRole('button', { name: 'Далее' }));
+    expect(await within(personal).findByRole('heading', {
+      name: secondMineArticle.title,
+    })).toBeInTheDocument();
+    expect(within(catalog).getByRole('heading', { name: publicArticle.title }))
+      .toBeInTheDocument();
+    expect(publicSecondPage).not.toHaveBeenCalled();
+
+    await browser.click(within(catalog).getByRole('button', { name: 'Далее' }));
+    expect(await within(catalog).findByRole('heading', {
+      name: secondPublicArticle.title,
+    })).toBeInTheDocument();
+    expect(mineSecondPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('показывает независимые empty и error states личных статей', async () => {
+    mockKnowledgeApi();
+    const browser = userEvent.setup();
+    const emptyPageView = renderPage();
+    await browser.click(await screen.findByRole('tab', { name: 'Статьи' }));
+
+    const personal = await screen.findByRole('region', { name: 'Ваши статьи' });
+    expect(within(personal).getByRole('heading', { name: 'У вас пока нет статей.' }))
+      .toBeInTheDocument();
+
+    emptyPageView.unmount();
+    mockKnowledgeApi({
+      '/api/knowledge/articles/': () => Promise.resolve(
+        jsonResponse(page([publicArticle])),
+      ),
+      '/api/knowledge/articles/mine/': () => Promise.resolve(
+        jsonResponse({ detail: 'Ошибка' }, 500),
+      ),
+    });
+    renderPage();
+    await browser.click(await screen.findByRole('tab', { name: 'Статьи' }));
+
+    expect(await screen.findByRole('heading', {
+      name: 'Не удалось загрузить ваши статьи.',
+    })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: publicArticle.title }))
+      .toBeInTheDocument();
+  });
+
   it('показывает создание статьи только при существующем KnowledgeProfile', async () => {
     mockKnowledgeApi();
     const browser = userEvent.setup();
@@ -1186,7 +1308,7 @@ describe('KnowledgePage', () => {
     );
 
     authorPage.unmount();
-    mockKnowledgeApi({
+    const readerFetchMock = mockKnowledgeApi({
       '/api/knowledge/profile/': () => Promise.resolve(
         jsonResponse({ detail: 'Не найдено' }, 404),
       ),
@@ -1195,6 +1317,8 @@ describe('KnowledgePage', () => {
     await browser.click(await screen.findByRole('tab', { name: 'Статьи' }));
     await screen.findByRole('heading', { name: 'Публичных статей пока нет.' });
     expect(screen.queryByRole('link', { name: 'Написать статью' })).not.toBeInTheDocument();
+    const paths = readerFetchMock.mock.calls.map(([path]) => path);
+    expect(paths).not.toContain('/api/knowledge/articles/mine/');
   });
 
   it('анонимно загружает public articles без profile/library и create action', async () => {
@@ -1215,6 +1339,7 @@ describe('KnowledgePage', () => {
     const paths = fetchMock.mock.calls.map(([path]) => path);
     expect(paths).not.toContain('/api/knowledge/profile/');
     expect(paths).not.toContain('/api/knowledge/library/');
+    expect(paths).not.toContain('/api/knowledge/articles/mine/');
   });
 
   it('показывает articles error, не ломая переключатель разделов', async () => {
