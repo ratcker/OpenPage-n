@@ -280,7 +280,7 @@ export default function ArticleEditorPage({ mode }) {
         ) : (
           <div className="article-editor-preview">
             {form.body ? (
-              <MarkdownContent>{form.body}</MarkdownContent>
+              <MarkdownContent authenticatedImages>{form.body}</MarkdownContent>
             ) : (
               <p>Предпросмотр появится после начала работы над текстом.</p>
             )}

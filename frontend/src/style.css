@@ -1510,7 +1510,7 @@ a {
 .articles-layout-with-personal {
   max-width: none;
   display: grid;
-  grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.2fr);
+  grid-template-columns: 240px minmax(0, 1fr);
   align-items: start;
   gap: 32px;
 }
@@ -1520,18 +1520,58 @@ a {
 }
 
 .my-articles .article-card {
-  grid-template-columns: 48px minmax(0, 1fr);
-  gap: 16px;
-  padding: 18px;
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 14px 15px;
 }
 
-.my-articles .article-card-mark {
-  width: 46px;
-  height: 46px;
+.my-articles .knowledge-section-heading {
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.my-articles .knowledge-section-heading h2 {
+  font-size: 1.65rem;
+}
+
+.my-articles .article-create-link {
+  min-height: 36px;
+  justify-content: center;
+  padding-inline: 12px;
+}
+
+.my-articles .article-card-mark,
+.my-articles .article-card-meta a,
+.my-articles .article-card-excerpt {
+  display: none;
+}
+
+.my-articles .article-card-meta {
+  margin-bottom: 7px;
+}
+
+.my-articles .article-card-meta time::before {
+  display: none;
+}
+
+.my-articles .article-card h3 {
+  font-size: 0.88rem;
+  line-height: 1.4;
 }
 
 .my-articles .article-card-open {
-  display: none;
+  width: 30px;
+  height: 30px;
+}
+
+@media (min-width: 1201px) {
+  .articles-layout-with-personal {
+    width: calc(100% + 64px);
+    margin-left: -64px;
+  }
 }
 
 .article-create-link {
@@ -1881,6 +1921,23 @@ a {
   display: block;
   margin: 28px auto;
   border-radius: 8px;
+}
+
+.markdown-image-loading,
+.markdown-image-error {
+  display: block;
+  margin: 28px 0;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted-text);
+  background: #100e14;
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.markdown-image-error {
+  color: #dca5aa;
 }
 
 /* Markdown editor */

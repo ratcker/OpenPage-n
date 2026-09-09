@@ -127,7 +127,9 @@ export default function ArticlePage() {
             <p className="article-action-error" role="alert">{deleteError}</p>
           )}
         </header>
-        <MarkdownContent>{article.body}</MarkdownContent>
+        <MarkdownContent authenticatedImages={article.visibility === 'private'}>
+          {article.body}
+        </MarkdownContent>
       </article>
     );
   }

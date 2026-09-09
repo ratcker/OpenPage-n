@@ -20,19 +20,18 @@ function resolveApiUrl(path) {
   return path.startsWith('/api/') ? path : `${AUTH_URL}${path}`;
 }
 
-// Базовый запрос к API
-export async function request(path, options = {}) {
-  let response;
-
+async function fetchResponse(path, options = {}) {
   try {
-    response = await fetch(resolveApiUrl(path), {
+    return await fetch(resolveApiUrl(path), {
       credentials: 'include',
       ...options,
     });
   } catch {
     throw new Error('Сервер недоступен. Попробуйте позже.');
   }
+}
 
+async function readResponse(response) {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
@@ -42,6 +41,11 @@ export async function request(path, options = {}) {
   }
 
   return data;
+}
+
+// Базовый запрос к API
+export async function request(path, options = {}) {
+  return readResponse(await fetchResponse(path, options));
 }
 
 // Сессия сообщает провайдеру только о пользователе, но не раскрывает токен.
@@ -83,23 +87,33 @@ export function refreshSession() {
   return refreshPromise;
 }
 
-// Защищённый запрос обновляет токен и повторяется только один раз.
-export async function authorizedRequest(path, options = {}, isRetry = false) {
-  try {
-    return await request(path, {
-      ...options,
-      headers: {
-        ...options.headers,
-        ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
-      },
-    });
-  } catch (error) {
-    if (error.status !== 401 || isRetry) {
-      if (error.status === 401) clearSession();
-      throw error;
-    }
+async function authorizedResponse(path, options = {}, isRetry = false) {
+  const response = await fetchResponse(path, {
+    ...options,
+    headers: {
+      ...options.headers,
+      ...(accessToken && { Authorization: `Bearer ${accessToken}` }),
+    },
+  });
 
-    await refreshSession();
-    return authorizedRequest(path, options, true);
+  if (response.status !== 401) return response;
+  if (isRetry) {
+    clearSession();
+    return response;
   }
+
+  await refreshSession();
+  return authorizedResponse(path, options, true);
+}
+
+// Защищённый запрос обновляет токен и повторяется только один раз.
+export async function authorizedRequest(path, options = {}) {
+  return readResponse(await authorizedResponse(path, options));
+}
+
+// Изображение получает тот же Bearer-токен, но возвращается как Blob, а не JSON.
+export async function authorizedBlobRequest(path) {
+  const response = await authorizedResponse(path);
+  if (!response.ok) await readResponse(response);
+  return response.blob();
 }

@@ -98,6 +98,39 @@ describe('ArticlePage', () => {
     expect(fetchMock.mock.calls[0][1].headers).toBeUndefined();
   });
 
+  it('загружает изображение private-статьи с access-токеном', async () => {
+    const imagePath = '/api/knowledge/article-images/image-id/';
+    const privateArticle = { ...article, visibility: 'private', can_edit: true };
+    const fetchMock = vi.fn((url) => {
+      if (url === `/api/knowledge/articles/${articleId}/`) {
+        return Promise.resolve(jsonResponse(privateArticle));
+      }
+      if (url === imagePath) {
+        return Promise.resolve(new Response(
+          new Blob(['private-image'], { type: 'image/png' }),
+        ));
+      }
+      throw new Error(`Неожиданный запрос: ${url}`);
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:private-image');
+    vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {});
+    saveSession({ access: 'article-token', user: mockUser });
+
+    renderPage('authenticated');
+
+    expect(await screen.findByRole('img', { name: 'Схема' })).toHaveAttribute(
+      'src',
+      'blob:private-image',
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      imagePath,
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer article-token' }),
+      }),
+    );
+  });
+
   it('показывает owner controls только по can_edit и удаляет после подтверждения', async () => {
     saveSession({ access: 'article-token', user: mockUser });
     const fetchMock = mockArticleApi((options) => {
