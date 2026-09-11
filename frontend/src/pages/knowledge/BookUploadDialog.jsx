@@ -18,6 +18,8 @@ const initialForm = {
   cover: null,
   format: 'epub',
   visibility: 'private',
+  publication_basis: '',
+  rights_confirmation: false,
 };
 
 function uploadErrorMessage(error) {
@@ -85,15 +87,27 @@ export default function BookUploadDialog({ onClose, onUploaded }) {
   }
 
   function handleChange(event) {
-    const { name, value, files } = event.target;
+    const {
+      name, value, files, checked, type,
+    } = event.target;
     if (name === 'file') {
       handleBookFile(files[0] || null);
       return;
     }
-    setForm((current) => ({
-      ...current,
-      [name]: files ? files[0] || null : value,
-    }));
+    setForm((current) => {
+      let nextValue = value;
+      if (files) nextValue = files[0] || null;
+      if (type === 'checkbox') nextValue = checked;
+      const next = {
+        ...current,
+        [name]: nextValue,
+      };
+      if (name === 'visibility' && value === 'private') {
+        next.publication_basis = '';
+        next.rights_confirmation = false;
+      }
+      return next;
+    });
   }
 
   async function handleSubmit(event) {
@@ -122,6 +136,10 @@ export default function BookUploadDialog({ onClose, onUploaded }) {
   function handleBackdropClick(event) {
     if (!isPending && event.target === event.currentTarget) onClose();
   }
+
+  const publicRightsMissing = form.visibility === 'public' && (
+    !form.publication_basis || !form.rights_confirmation
+  );
 
   return (
     <div className="book-upload-backdrop" onMouseDown={handleBackdropClick}>
@@ -203,6 +221,63 @@ export default function BookUploadDialog({ onClose, onUploaded }) {
             </label>
           </div>
 
+          {form.visibility === 'public' ? (
+            <fieldset className="book-publication-rights">
+              <legend>Права на публикацию</legend>
+              <label className="book-publication-basis">
+                <input
+                  type="radio"
+                  name="publication_basis"
+                  value="author"
+                  checked={form.publication_basis === 'author'}
+                  disabled={isPending || previewStatus === 'loading'}
+                  onChange={handleChange}
+                />
+                <span>
+                  <strong>Я автор произведения</strong>
+                  <small>
+                    Я подтверждаю публикацию этой книги на платформе Опенпейч.
+                  </small>
+                </span>
+              </label>
+              <label className="book-publication-basis">
+                <input
+                  type="radio"
+                  name="publication_basis"
+                  value="authorized_distributor"
+                  checked={form.publication_basis === 'authorized_distributor'}
+                  disabled={isPending || previewStatus === 'loading'}
+                  onChange={handleChange}
+                />
+                <span>
+                  <strong>Я распространяю произведение</strong>
+                  <small>
+                    Я подтверждаю, что обладаю необходимыми правами для публикации
+                    и распространения этой книги на платформе Опенпейч.
+                  </small>
+                </span>
+              </label>
+              <label className="book-rights-confirmation">
+                <input
+                  type="checkbox"
+                  name="rights_confirmation"
+                  checked={form.rights_confirmation}
+                  disabled={isPending || previewStatus === 'loading'}
+                  onChange={handleChange}
+                />
+                <span>
+                  Я подтверждаю достоверность указанных сведений и наличие необходимых
+                  прав на публикацию произведения.
+                </span>
+              </label>
+            </fieldset>
+          ) : (
+            <p className="book-private-rights-note">
+              Приватная книга будет доступна только вам. Подтверждение публичного
+              распространения не требуется.
+            </p>
+          )}
+
           {error && <p className="book-upload-error" role="alert">{error}</p>}
 
           <div className="book-upload-actions">
@@ -212,7 +287,7 @@ export default function BookUploadDialog({ onClose, onUploaded }) {
             <button
               className="primary-button"
               type="submit"
-              disabled={isPending || previewStatus === 'loading'}
+              disabled={isPending || previewStatus === 'loading' || publicRightsMissing}
             >
               {isPending ? 'Загружаем…' : 'Загрузить'}
             </button>

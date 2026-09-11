@@ -6,6 +6,7 @@ from django.db import transaction
 from .book_files import inspect_book_file
 from .covers import read_cover_image, read_image
 from .models import Book, KnowledgeProfile, UserLibraryBook
+from .publication_rights import confirmed_publication_rights
 from .storage import (
     book_cover_storage_key,
     book_storage_key,
@@ -42,11 +43,18 @@ def create_book(
     year=None,
     publisher="",
     cover=None,
+    publication_basis=None,
+    rights_confirmation=False,
     storage=None,
 ):
     if format not in Book.Format.values:
         raise ValidationError({"format": "Неподдерживаемый формат книги."})
 
+    rights = confirmed_publication_rights(
+        visibility=visibility,
+        publication_basis=publication_basis,
+        confirmation=rights_confirmation,
+    )
     preview = inspect_book_file(content, format)
 
     if storage is None:
@@ -84,6 +92,7 @@ def create_book(
         status=Book.Status.PROCESSING,
         storage_key=storage_key,
         cover_key=cover_key,
+        **rights,
     )
     attempted_keys = []
 

@@ -1,5 +1,7 @@
 import { Link } from 'react-router-dom';
 
+import { BookPublicationNotice } from './BookPublicationInfo.jsx';
+
 function formatProgress(value) {
   const progress = Number(value);
   return `${Math.round(Number.isFinite(progress) ? progress : 0)}%`;
@@ -30,6 +32,7 @@ export default function ReaderToolbar({
       </div>
 
       <div className="reader-toolbar-actions">
+        <BookPublicationNotice book={book} />
         <output className="reader-progress" aria-label="Прогресс чтения">
           {formatProgress(progress)}
         </output>

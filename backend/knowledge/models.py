@@ -44,6 +44,13 @@ class Book(models.Model):
         PUBLIC = "public", "Public"
         PRIVATE = "private", "Private"
 
+    class PublicationBasis(models.TextChoices):
+        AUTHOR = "author", "Автор произведения"
+        AUTHORIZED_DISTRIBUTOR = (
+            "authorized_distributor",
+            "Правообладатель или уполномоченный распространитель",
+        )
+
     class Status(models.TextChoices):
         PROCESSING = "processing", "Processing"
         READY = "ready", "Ready"
@@ -71,6 +78,24 @@ class Book(models.Model):
         choices=Visibility.choices,
         default=Visibility.PRIVATE,
     )
+    publication_basis = models.CharField(
+        max_length=32,
+        choices=PublicationBasis.choices,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    rights_confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    rights_statement_version = models.CharField(
+        max_length=16,
+        null=True,
+        blank=True,
+        editable=False,
+    )
     status = models.CharField(
         max_length=10,
         choices=Status.choices,
@@ -97,6 +122,24 @@ class Book(models.Model):
             models.CheckConstraint(
                 condition=models.Q(status__in=("processing", "ready", "failed")),
                 name="knowledge_book_status_valid",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        publication_basis__isnull=True,
+                        rights_confirmed_at__isnull=True,
+                        rights_statement_version__isnull=True,
+                    )
+                    | models.Q(
+                        publication_basis__in=(
+                            "author",
+                            "authorized_distributor",
+                        ),
+                        rights_confirmed_at__isnull=False,
+                        rights_statement_version__isnull=False,
+                    )
+                ),
+                name="knowledge_book_rights_fields_consistent",
             ),
         ]
 

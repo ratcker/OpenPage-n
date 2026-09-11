@@ -105,6 +105,8 @@ class BookListView(GenericAPIView):
             "МБ и проверяет формат по содержимому. Можно передать необязательные "
             "метаданные и обложку; для EPUB без ручной обложки используется обложка "
             "из файла. Требуется профиль автора материалов."
+            " Для публичной публикации нужно указать основание и подтвердить "
+            "наличие необходимых прав."
         ),
         tags=[KNOWLEDGE_TAG],
         request=BookUploadSerializer,
@@ -117,11 +119,14 @@ class BookListView(GenericAPIView):
                         "Загруженная книга",
                         value={
                             "id": "2c9f34e4-d3f1-44d6-ae72-228c87496f3d",
-                            "title": "Новая книга",
+                            "title": "Книга автора",
                             "author": "Автор книги",
                             "description": "Описание",
                             "format": "epub",
-                            "visibility": "private",
+                            "visibility": "public",
+                            "publication_basis": "author",
+                            "rights_confirmed_at": "2026-08-30T12:00:00Z",
+                            "rights_statement_version": "1",
                             "status": "ready",
                             "created_at": "2026-08-30T12:00:00Z",
                             "updated_at": "2026-08-30T12:00:01Z",
@@ -179,6 +184,8 @@ class BookListView(GenericAPIView):
                 year=data.get("year"),
                 publisher=data.get("publisher", ""),
                 cover=data.get("cover"),
+                publication_basis=data.get("publication_basis"),
+                rights_confirmation=data.get("rights_confirmation", False),
             )
         except InvalidBookFile as error:
             raise ValidationError({"file": str(error)}) from error

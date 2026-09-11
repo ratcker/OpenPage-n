@@ -158,6 +158,10 @@ export function uploadKnowledgeBook(data) {
   body.append('description', data.description);
   body.append('format', data.format);
   body.append('visibility', data.visibility);
+  if (data.visibility === 'public') {
+    body.append('publication_basis', data.publication_basis);
+    body.append('rights_confirmation', String(data.rights_confirmation));
+  }
   for (const field of ['language', 'year', 'publisher']) {
     if (data[field] !== '' && data[field] !== null && data[field] !== undefined) {
       body.append(field, data[field]);

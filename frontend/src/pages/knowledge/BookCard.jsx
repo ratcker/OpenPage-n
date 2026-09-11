@@ -1,6 +1,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
+import { BookPublicationBadge } from './BookPublicationInfo.jsx';
+
 function formatProgress(value) {
   const progress = Number(value);
   return Number.isFinite(progress) ? `${value}%` : '0%';
@@ -43,6 +45,7 @@ export default function BookCard({ book, readingPercentage, action, onEdit }) {
       <div className="book-card-copy">
         <p>{authorLine}</p>
         <h3>{book.title}</h3>
+        <BookPublicationBadge book={book} />
         {(book.publisher || book.language) && (
           <div className="book-metadata">
             {book.publisher && <span>{book.publisher}</span>}

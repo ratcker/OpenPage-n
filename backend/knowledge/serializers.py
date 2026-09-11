@@ -1,10 +1,12 @@
 from datetime import date
 
 from django.conf import settings
+from django.core.exceptions import ValidationError as DjangoValidationError
 from rest_framework import serializers
 
 from .covers import read_cover_image, read_image
 from .models import Book, KnowledgeProfile, UserLibraryBook
+from .publication_rights import validate_publication_rights
 from .storage import get_knowledge_storage
 
 
@@ -53,6 +55,22 @@ class OptionalMetadataSerializer(serializers.Serializer):
 class BookSerializer(serializers.ModelSerializer):
     cover_url = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    publication_basis = serializers.ChoiceField(
+        choices=Book.PublicationBasis.choices,
+        read_only=True,
+        allow_null=True,
+        help_text="Основание, подтверждённое пользователем при публичной публикации.",
+    )
+    rights_confirmed_at = serializers.DateTimeField(
+        read_only=True,
+        allow_null=True,
+        help_text="Время подтверждения прав пользователем.",
+    )
+    rights_statement_version = serializers.CharField(
+        read_only=True,
+        allow_null=True,
+        help_text="Версия текста подтверждения прав.",
+    )
 
     def get_cover_url(self, book) -> str | None:
         if not book.cover_key:
@@ -84,6 +102,9 @@ class BookSerializer(serializers.ModelSerializer):
             "can_edit",
             "format",
             "visibility",
+            "publication_basis",
+            "rights_confirmed_at",
+            "rights_statement_version",
             "status",
             "created_at",
             "updated_at",
@@ -98,7 +119,38 @@ class BookUploadSerializer(OptionalMetadataSerializer):
     description = serializers.CharField(required=False, allow_blank=True, default="")
     format = serializers.ChoiceField(choices=Book.Format.choices)
     visibility = serializers.ChoiceField(choices=Book.Visibility.choices)
+    publication_basis = serializers.ChoiceField(
+        choices=Book.PublicationBasis.choices,
+        required=False,
+        allow_null=True,
+        help_text="Основание публичной публикации книги.",
+    )
+    rights_confirmation = serializers.BooleanField(
+        required=False,
+        write_only=True,
+        help_text=(
+            "Обязательно для публичной публикации. Подтверждает достоверность "
+            "сведений и наличие необходимых прав."
+        ),
+    )
+    rights_confirmed_at = serializers.DateTimeField(read_only=True)
+    rights_statement_version = serializers.CharField(read_only=True)
     cover = serializers.FileField(required=False, validators=[_validate_cover])
+
+    def validate(self, attrs):
+        try:
+            validate_publication_rights(
+                visibility=attrs["visibility"],
+                publication_basis=attrs.get("publication_basis"),
+                confirmation=attrs.get("rights_confirmation"),
+            )
+        except DjangoValidationError as error:
+            raise serializers.ValidationError(error.message_dict) from error
+
+        if attrs["visibility"] == Book.Visibility.PRIVATE:
+            attrs.pop("publication_basis", None)
+            attrs.pop("rights_confirmation", None)
+        return attrs
 
 
 class BookUpdateSerializer(OptionalMetadataSerializer):
@@ -115,6 +167,10 @@ class BookUpdateSerializer(OptionalMetadataSerializer):
         "storage_key",
         "cover_key",
         "status",
+        "publication_basis",
+        "rights_confirmation",
+        "rights_confirmed_at",
+        "rights_statement_version",
     }
 
     def to_internal_value(self, data):

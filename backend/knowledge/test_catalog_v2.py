@@ -9,6 +9,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 from rest_framework_simplejwt.tokens import RefreshToken
@@ -131,6 +132,9 @@ class CatalogV2APITestCase(APITestCase):
             "publisher": "  Издатель  ",
         }
         data.update(changes)
+        if data["visibility"] == Book.Visibility.PUBLIC:
+            data.setdefault("publication_basis", Book.PublicationBasis.AUTHOR)
+            data.setdefault("rights_confirmation", True)
         return data
 
 
@@ -306,6 +310,112 @@ class BookMetadataUploadAPITests(CatalogV2APITestCase):
         self.assertFalse(Book.objects.filter(status=Book.Status.READY).exists())
         self.assertFalse(Book.objects.exists())
 
+
+class BookPublicationRightsAPITests(CatalogV2APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.authenticate()
+        self.url = reverse("knowledge_books")
+
+    def post_public(self, **changes):
+        return self.client.post(
+            self.url,
+            self.upload_data(visibility=Book.Visibility.PUBLIC, **changes),
+            format="multipart",
+        )
+
+    def test_author_and_distributor_can_confirm_publication_rights(self):
+        for basis in Book.PublicationBasis.values:
+            with self.subTest(basis=basis):
+                before = timezone.now()
+                response = self.post_public(publication_basis=basis)
+                after = timezone.now()
+
+                self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+                book = Book.objects.latest("created_at")
+                self.assertEqual(book.publication_basis, basis)
+                self.assertLessEqual(before, book.rights_confirmed_at)
+                self.assertLessEqual(book.rights_confirmed_at, after)
+                self.assertEqual(book.rights_statement_version, "1")
+                self.assertEqual(response.data["publication_basis"], basis)
+                self.assertEqual(response.data["rights_statement_version"], "1")
+                self.assertNotIn("rights_confirmation", response.data)
+
+    def test_publication_requires_basis_and_positive_confirmation(self):
+        without_basis = self.upload_data(visibility=Book.Visibility.PUBLIC)
+        without_basis.pop("publication_basis")
+        without_confirmation = self.upload_data(visibility=Book.Visibility.PUBLIC)
+        without_confirmation.pop("rights_confirmation")
+        confirmation_false = self.upload_data(
+            visibility=Book.Visibility.PUBLIC,
+            rights_confirmation=False,
+        )
+
+        for data, error_field in (
+            (without_basis, "publication_basis"),
+            (without_confirmation, "rights_confirmation"),
+            (confirmation_false, "rights_confirmation"),
+        ):
+            with self.subTest(error_field=error_field, fields=tuple(data)):
+                response = self.client.post(self.url, data, format="multipart")
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn(error_field, response.data)
+                if error_field == "rights_confirmation":
+                    self.assertEqual(
+                        str(response.data[error_field][0]),
+                        "Для публичной публикации книги необходимо подтвердить "
+                        "наличие необходимых прав.",
+                    )
+        self.assertFalse(Book.objects.exists())
+
+    def test_private_upload_does_not_require_or_store_publication_rights(self):
+        response = self.client.post(
+            self.url,
+            self.upload_data(),
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        book = Book.objects.get()
+        self.assertIsNone(book.publication_basis)
+        self.assertIsNone(book.rights_confirmed_at)
+        self.assertIsNone(book.rights_statement_version)
+        self.assertIsNone(response.data["publication_basis"])
+        self.assertIsNone(response.data["rights_confirmed_at"])
+        self.assertIsNone(response.data["rights_statement_version"])
+
+    def test_client_cannot_replace_server_confirmation_values(self):
+        response = self.post_public(
+            rights_confirmed_at="2000-01-01T00:00:00Z",
+            rights_statement_version="client-version",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        book = Book.objects.get()
+        self.assertGreater(book.rights_confirmed_at.year, 2000)
+        self.assertEqual(book.rights_statement_version, "1")
+
+    def test_existing_public_book_without_confirmation_serializes_as_null(self):
+        book = self.create_model_book()
+        Book.objects.filter(pk=book.pk).update(visibility=Book.Visibility.PUBLIC)
+
+        response = self.client.get(
+            reverse("knowledge_book_detail", kwargs={"book_uuid": book.pk})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIsNone(response.data["publication_basis"])
+        self.assertIsNone(response.data["rights_confirmed_at"])
+        self.assertIsNone(response.data["rights_statement_version"])
+
+
+class BookUploadValidationAPITests(CatalogV2APITestCase):
+    def setUp(self):
+        super().setUp()
+        self.authenticate()
+        self.url = reverse("knowledge_books")
+
     def test_book_at_configured_size_limit_is_accepted(self):
         content = make_pdf()
         with override_settings(KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES=len(content)):
@@ -419,6 +529,10 @@ class BookMetadataPatchAPITests(CatalogV2APITestCase):
             "uploaded_by": self.other_user.id,
             "status": "failed",
             "file": self.epub_file(),
+            "publication_basis": Book.PublicationBasis.AUTHOR,
+            "rights_confirmation": True,
+            "rights_confirmed_at": "2026-01-01T00:00:00Z",
+            "rights_statement_version": "2",
         }.items():
             with self.subTest(field=field):
                 response = self.client.patch(

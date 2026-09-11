@@ -72,7 +72,7 @@ const contentPath = `/api/knowledge/books/${bookId}/content/`;
 const progressReadPath = `/api/knowledge/books/${bookId}/progress/`;
 const progressWritePath = `/api/knowledge/library/${bookId}/progress/`;
 
-function book(format = 'pdf') {
+function book(format = 'pdf', changes = {}) {
   return {
     id: bookId,
     title: format === 'pdf' ? 'Книга в PDF' : 'Книга в EPUB',
@@ -81,12 +81,17 @@ function book(format = 'pdf') {
     format,
     visibility: 'public',
     status: 'ready',
+    publication_basis: null,
+    rights_confirmed_at: null,
+    rights_statement_version: null,
+    ...changes,
   };
 }
 
 function mockReaderApi({
   format = 'pdf',
   bookHandler,
+  bookData,
   contentHandler,
   savedProgress = {
     reading_location: null,
@@ -97,7 +102,9 @@ function mockReaderApi({
   progressHandler,
 } = {}) {
   const handlers = {
-    [bookPath]: bookHandler || (() => Promise.resolve(jsonResponse(book(format)))),
+    [bookPath]: bookHandler || (() => Promise.resolve(
+      jsonResponse(bookData || book(format)),
+    )),
     [contentPath]: contentHandler || (() => Promise.resolve(jsonResponse({
       url: `https://s3.example.test/${format}-book`,
       expires_in: 300,
@@ -158,6 +165,7 @@ describe('ReaderPage', () => {
     expect(screen.getByRole('heading', { name: 'Книга в PDF' })).toBeInTheDocument();
     expect(screen.getByText('PDF URL: https://s3.example.test/pdf-book')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Во весь экран' })).toBeInTheDocument();
+    expect(screen.queryByText('О публикации')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Передвинуть PDF' }));
     expect(screen.getByLabelText('Прогресс чтения')).toHaveTextContent('42%');
 
@@ -170,6 +178,37 @@ describe('ReaderPage', () => {
         expect(options.headers).toBeUndefined();
       }
     }
+  });
+
+  it.each([
+    [
+      'author',
+      'Опубликовано автором.',
+      'Автор подтвердил право разместить произведение на платформе Опенпейч.',
+    ],
+    [
+      'authorized_distributor',
+      'Размещено пользователем Опенпейч.',
+      /Пользователь подтвердил наличие необходимых прав/,
+    ],
+  ])('показывает сведения о публичной публикации для %s', async (
+    publicationBasis,
+    heading,
+    description,
+  ) => {
+    mockReaderApi({
+      bookData: book('pdf', { publication_basis: publicationBasis }),
+    });
+    const browser = userEvent.setup();
+    renderReader();
+
+    await screen.findByTestId('pdf-renderer');
+    await browser.click(screen.getByText('О публикации'));
+    expect(screen.getByText(heading)).toBeInTheDocument();
+    expect(screen.getByText(description)).toBeInTheDocument();
+    expect(screen.getByText(
+      'Опенпейч не подтверждает авторство или наличие прав самостоятельно.',
+    )).toBeInTheDocument();
   });
 
   it('выбирает EPUB renderer по metadata книги', async () => {

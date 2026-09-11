@@ -555,6 +555,98 @@ describe('KnowledgePage', () => {
     expect(screen.getByLabelText('Обложка')).toHaveAttribute('type', 'file');
     expect(screen.getByLabelText('Формат')).toHaveValue('epub');
     expect(screen.getByLabelText('Видимость')).toHaveValue('private');
+    expect(screen.getByText(
+      /Приватная книга будет доступна только вам/,
+    )).toBeInTheDocument();
+    expect(screen.queryByText('Права на публикацию')).not.toBeInTheDocument();
+  });
+
+  it('требует основание и подтверждение для публичной книги', async () => {
+    mockKnowledgeApi();
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Загрузить книгу' }));
+    await browser.selectOptions(screen.getByLabelText('Видимость'), 'public');
+
+    const submit = screen.getByRole('button', { name: 'Загрузить' });
+    expect(screen.getByText('Права на публикацию')).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Я автор произведения/ }))
+      .not.toBeChecked();
+    expect(screen.getByRole('radio', { name: /Я распространяю произведение/ }))
+      .not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: /Я подтверждаю достоверность/ }))
+      .not.toBeChecked();
+    expect(submit).toBeDisabled();
+
+    await browser.click(screen.getByRole('radio', { name: /Я автор произведения/ }));
+    expect(submit).toBeDisabled();
+    await browser.click(screen.getByRole('checkbox', {
+      name: /Я подтверждаю достоверность/,
+    }));
+    expect(submit).toBeEnabled();
+  });
+
+  it.each([
+    ['Я автор произведения', 'author'],
+    ['Я распространяю произведение', 'authorized_distributor'],
+  ])('отправляет выбранное основание «%s»', async (label, basis) => {
+    let uploadOptions;
+    mockKnowledgeApi({
+      '/api/knowledge/books/': (options) => {
+        if (options.method === 'POST') {
+          uploadOptions = options;
+          return Promise.resolve(jsonResponse({ ...publicBook, publication_basis: basis }, 201));
+        }
+        return Promise.resolve(jsonResponse(page([publicBook])));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Загрузить книгу' }));
+    await fillUploadForm(browser, {
+      file: new File(['pdf'], 'book.pdf', { type: 'application/pdf' }),
+      format: 'pdf',
+      visibility: 'public',
+    });
+    await browser.click(screen.getByRole('radio', { name: new RegExp(label) }));
+    await browser.click(screen.getByRole('checkbox', {
+      name: /Я подтверждаю достоверность/,
+    }));
+    await browser.click(screen.getByRole('button', { name: 'Загрузить' }));
+
+    await waitFor(() => expect(uploadOptions).toBeDefined());
+    expect(uploadOptions.body.get('publication_basis')).toBe(basis);
+    expect(uploadOptions.body.get('rights_confirmation')).toBe('true');
+    expect(uploadOptions.body.get('rights_confirmed_at')).toBeNull();
+    expect(uploadOptions.body.get('rights_statement_version')).toBeNull();
+  });
+
+  it('не отправляет права для приватной книги', async () => {
+    let uploadOptions;
+    mockKnowledgeApi({
+      '/api/knowledge/books/': (options) => {
+        if (options.method === 'POST') {
+          uploadOptions = options;
+          return Promise.resolve(jsonResponse({ ...libraryBook }, 201));
+        }
+        return Promise.resolve(jsonResponse(page([publicBook])));
+      },
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Загрузить книгу' }));
+    await fillUploadForm(browser, {
+      file: new File(['pdf'], 'book.pdf', { type: 'application/pdf' }),
+      format: 'pdf',
+    });
+    await browser.click(screen.getByRole('button', { name: 'Загрузить' }));
+
+    await waitFor(() => expect(uploadOptions).toBeDefined());
+    expect(uploadOptions.body.get('publication_basis')).toBeNull();
+    expect(uploadOptions.body.get('rights_confirmation')).toBeNull();
   });
 
   it('извлекает EPUB metadata один раз и сохраняет последующий ручной ввод', async () => {
@@ -747,6 +839,10 @@ describe('KnowledgePage', () => {
       format: 'pdf',
       visibility: 'public',
     });
+    await browser.click(screen.getByRole('radio', { name: /Я автор произведения/ }));
+    await browser.click(screen.getByRole('checkbox', {
+      name: /Я подтверждаю достоверность/,
+    }));
     expect(screen.getByLabelText('Файл').files).toHaveLength(1);
     await browser.click(screen.getByRole('button', { name: 'Загрузить' }));
 
@@ -767,6 +863,8 @@ describe('KnowledgePage', () => {
     expect(uploadOptions.body.get('description')).toBe(values.description);
     expect(uploadOptions.body.get('format')).toBe('pdf');
     expect(uploadOptions.body.get('visibility')).toBe('public');
+    expect(uploadOptions.body.get('publication_basis')).toBe('author');
+    expect(uploadOptions.body.get('rights_confirmation')).toBe('true');
     expect(uploadOptions.body.get('language')).toBe(values.language);
     expect(uploadOptions.body.get('year')).toBe(values.year);
     expect(uploadOptions.body.get('publisher')).toBe(values.publisher);
@@ -780,7 +878,37 @@ describe('KnowledgePage', () => {
     expect(screen.getByLabelText('Издательство')).toHaveValue('');
     expect(screen.getByLabelText('Формат')).toHaveValue('epub');
     expect(screen.getByLabelText('Видимость')).toHaveValue('private');
+    expect(screen.queryByText('Права на публикацию')).not.toBeInTheDocument();
     expect(screen.getByLabelText('Файл').files).toHaveLength(0);
+  });
+
+  it('показывает publication badge только для подтверждённых оснований', async () => {
+    const authorBook = {
+      ...publicBook,
+      id: '102de39a-2e75-4c91-991e-3ba77ad81527',
+      title: 'Книга автора',
+      publication_basis: 'author',
+    };
+    const distributorBook = {
+      ...publicBook,
+      id: '168cfaaf-adc4-4893-92d1-d5eb97dfc424',
+      title: 'Книга распространителя',
+      publication_basis: 'authorized_distributor',
+    };
+    mockKnowledgeApi({
+      '/api/knowledge/books/': () => Promise.resolve(
+        jsonResponse(page([authorBook, distributorBook, publicBook])),
+      ),
+    });
+    renderPage();
+
+    expect(await screen.findByText('От автора')).toBeInTheDocument();
+    expect(screen.getByText('Опубликовано пользователем')).toBeInTheDocument();
+    const legacyCard = screen.getByRole('heading', { name: publicBook.title })
+      .closest('article');
+    expect(within(legacyCard).queryByText('От автора')).not.toBeInTheDocument();
+    expect(within(legacyCard).queryByText('Опубликовано пользователем'))
+      .not.toBeInTheDocument();
   });
 
   it.each([

@@ -92,7 +92,7 @@ class BookUploadAPITests(KnowledgeAPITestCase):
     def upload_data(self, *, format=Book.Format.EPUB, visibility=None):
         extension = "pdf" if format == Book.Format.PDF else "epub"
         content = make_pdf() if format == Book.Format.PDF else make_epub()
-        return {
+        data = {
             "file": SimpleUploadedFile(
                 f"user-file.{extension}",
                 content,
@@ -104,6 +104,12 @@ class BookUploadAPITests(KnowledgeAPITestCase):
             "format": format,
             "visibility": visibility or Book.Visibility.PRIVATE,
         }
+        if data["visibility"] == Book.Visibility.PUBLIC:
+            data.update(
+                publication_basis=Book.PublicationBasis.AUTHOR,
+                rights_confirmation=True,
+            )
+        return data
 
     def test_author_can_upload_epub(self):
         response = self.client.post(

@@ -165,6 +165,27 @@ class DocumentationTests(SimpleTestCase):
         self.assertNotIn("user", book["properties"])
         self.assertNotIn("email", book["properties"])
 
+    def test_book_schema_documents_publication_rights_contract(self):
+        schema = self.schema()
+        components = schema["components"]["schemas"]
+        book = components["Book"]["properties"]
+        upload = components["BookUploadRequest"]["properties"]
+
+        self.assertEqual(
+            components["PublicationBasisEnum"]["enum"],
+            ["author", "authorized_distributor"],
+        )
+        self.assertTrue(book["publication_basis"]["readOnly"])
+        self.assertTrue(book["rights_confirmed_at"]["readOnly"])
+        self.assertTrue(book["rights_statement_version"]["readOnly"])
+        self.assertTrue(upload["rights_confirmation"]["writeOnly"])
+        self.assertIn(
+            "Обязательно для публичной публикации",
+            upload["rights_confirmation"]["description"],
+        )
+        self.assertNotIn("rights_confirmed_at", upload)
+        self.assertNotIn("rights_statement_version", upload)
+
     def test_profile_schema_uses_multipart_and_hides_avatar_key(self):
         schema = self.schema()
         profile_schema = schema["components"]["schemas"]["KnowledgeProfile"]

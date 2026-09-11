@@ -325,6 +325,8 @@ class CreateBookTests(TestCase):
                 content=content,
                 format=Book.Format.PDF,
                 visibility=Book.Visibility.PUBLIC,
+                publication_basis=Book.PublicationBasis.AUTHOR,
+                rights_confirmation=True,
             )
 
             book.refresh_from_db()
@@ -340,6 +342,19 @@ class CreateBookTests(TestCase):
             self.assertTrue(
                 UserLibraryBook.objects.filter(user=self.user, book=book).exists()
             )
+
+    def test_public_book_requires_confirmation_before_storage_is_used(self):
+        with TemporaryDirectory() as root:
+            storage = TrackingLocalKnowledgeStorage(root=root)
+
+            with self.assertRaises(ValidationError):
+                self.create_book(
+                    storage,
+                    visibility=Book.Visibility.PUBLIC,
+                )
+
+            self.assertIsNone(storage.last_key)
+            self.assertFalse(Book.objects.exists())
 
     def test_storage_failure_rolls_back_database_and_removes_partial_file(self):
         with TemporaryDirectory() as root:
