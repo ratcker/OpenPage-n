@@ -9,6 +9,7 @@ from django.utils import timezone
 from .covers import read_image
 from .models import Article, ArticleImage, ArticleImageUploadSession
 from .storage import article_image_storage_key, get_knowledge_storage
+from .storage_cleanup import delete_storage_backed_queryset
 
 
 def upload_session_expires_at(session):
@@ -126,21 +127,8 @@ def create_article_image(*, upload_session, image, storage=None):
     return article_image
 
 
-def delete_article(*, article, storage=None):
-    if storage is None:
-        storage = get_knowledge_storage()
-
-    with transaction.atomic():
-        article = Article.objects.select_for_update().get(id=article.id)
-        image_keys = list(
-            ArticleImage.objects.filter(upload_session__article=article).values_list(
-                "storage_key",
-                flat=True,
-            )
-        )
-        for key in image_keys:
-            storage.delete(key)
-        article.delete()
+def delete_article(*, article):
+    delete_storage_backed_queryset(Article.objects.filter(id=article.id))
 
 
 def delete_abandoned_upload_session(*, session, cutoff, storage=None):

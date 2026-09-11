@@ -2,12 +2,17 @@ import { authorizedRequest, request } from './client.js';
 
 const KNOWLEDGE_URL = '/api/knowledge';
 
-export function getKnowledgeBooks() {
-  return request(`${KNOWLEDGE_URL}/books/`);
+function pageQuery(page) {
+  return page && page > 1 ? `?page=${page}` : '';
 }
 
-export function getKnowledgeLibrary() {
-  return authorizedRequest(`${KNOWLEDGE_URL}/library/`);
+export function getKnowledgeBooks(page, authenticated = false) {
+  const path = `${KNOWLEDGE_URL}/books/${pageQuery(page)}`;
+  return readerRequest(path, authenticated);
+}
+
+export function getKnowledgeLibrary(page) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/library/${pageQuery(page)}`);
 }
 
 export function getKnowledgeProfile() {
@@ -48,23 +53,19 @@ export function getKnowledgeAuthor(publicId) {
 }
 
 export function getKnowledgeAuthorBooks(publicId, page) {
-  const query = page && page > 1 ? `?page=${page}` : '';
-  return request(`${KNOWLEDGE_URL}/authors/${publicId}/books/${query}`);
+  return request(`${KNOWLEDGE_URL}/authors/${publicId}/books/${pageQuery(page)}`);
 }
 
 export function getKnowledgeArticles(page) {
-  const query = page && page > 1 ? `?page=${page}` : '';
-  return request(`${KNOWLEDGE_URL}/articles/${query}`);
+  return request(`${KNOWLEDGE_URL}/articles/${pageQuery(page)}`);
 }
 
 export function getMyKnowledgeArticles(page) {
-  const query = page && page > 1 ? `?page=${page}` : '';
-  return authorizedRequest(`${KNOWLEDGE_URL}/articles/mine/${query}`);
+  return authorizedRequest(`${KNOWLEDGE_URL}/articles/mine/${pageQuery(page)}`);
 }
 
 export function getKnowledgeAuthorArticles(publicId, page) {
-  const query = page && page > 1 ? `?page=${page}` : '';
-  return request(`${KNOWLEDGE_URL}/authors/${publicId}/articles/${query}`);
+  return request(`${KNOWLEDGE_URL}/authors/${publicId}/articles/${pageQuery(page)}`);
 }
 
 function readerRequest(path, authenticated) {
@@ -77,6 +78,10 @@ export function getKnowledgeBook(bookId, authenticated = false) {
 
 export function getKnowledgeBookContent(bookId, authenticated = false) {
   return readerRequest(`${KNOWLEDGE_URL}/books/${bookId}/content/`, authenticated);
+}
+
+export function getKnowledgeBookProgress(bookId) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/books/${bookId}/progress/`);
 }
 
 export function getKnowledgeArticle(articleId, authenticated = false) {

@@ -8,6 +8,7 @@ todo.ratcker
 
 frontend/dist/
 frontend/.vite/
+frontend/.vite-temp/
 
 __pycache__/
 *.py[cod]
@@ -18,10 +19,13 @@ __pycache__/
 .coverage
 coverage.xml
 htmlcov/
-.ruff_cache/
 
 backend/db.sqlite3
 backend/*.log
+backend/media/
+backend/staticfiles/
+frontend/coverage/
+/notes/*
 
 .env
 *.local

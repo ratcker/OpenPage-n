@@ -18,7 +18,13 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import User
 
 from .article_serializers import ArticleImageSerializer
-from .models import Article, ArticleImage, ArticleImageUploadSession, KnowledgeProfile
+from .models import (
+    Article,
+    ArticleImage,
+    ArticleImageUploadSession,
+    KnowledgeProfile,
+    StorageCleanupJob,
+)
 from .storage import LocalKnowledgeStorage, article_image_storage_key
 
 PNG = b"\x89PNG\r\n\x1a\narticle-image"
@@ -326,7 +332,7 @@ class ArticleDetailAPITests(ArticleAPITestCase):
                 )
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
-    def test_owner_delete_removes_article_images(self):
+    def test_owner_delete_enqueues_article_images(self):
         article = self.create_article()
         upload_session = ArticleImageUploadSession.objects.create(
             user=self.user,
@@ -335,16 +341,15 @@ class ArticleDetailAPITests(ArticleAPITestCase):
         image, storage = self.create_stored_image(session=upload_session)
         self.authenticate()
 
-        with patch(
-            "knowledge.article_views.get_knowledge_storage",
-            return_value=storage,
-        ):
-            response = self.client.delete(self.article_url(article))
+        response = self.client.delete(self.article_url(article))
 
         self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
         self.assertFalse(Article.objects.filter(id=article.id).exists())
         self.assertFalse(ArticleImage.objects.filter(id=image.id).exists())
-        self.assertFalse(storage.exists(image.storage_key))
+        self.assertTrue(storage.exists(image.storage_key))
+        job = StorageCleanupJob.objects.get(storage_key=image.storage_key)
+        self.assertEqual(job.reason, "article_deleted")
+        self.assertIsNone(job.completed_at)
 
 
 class ArticleImageUploadAPITests(ArticleAPITestCase):

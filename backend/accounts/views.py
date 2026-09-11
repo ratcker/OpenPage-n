@@ -24,6 +24,15 @@ from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from core.throttles import (
+    LoginEmailThrottle,
+    LoginIPThrottle,
+    RegisterEmailThrottle,
+    RegisterIPThrottle,
+    VerificationEmailThrottle,
+    VerificationIPThrottle,
+)
+
 from .models import PendingRegistration
 from .serializers import (
     AuthSessionSerializer,
@@ -260,6 +269,7 @@ class RegisterView(APIView):
     authentication_classes = []
     permission_classes = (AllowAny,)
     parser_classes = (JSONParser,)
+    throttle_classes = (RegisterIPThrottle, RegisterEmailThrottle)
 
     @extend_schema(
         operation_id="auth_register",
@@ -303,6 +313,10 @@ class RegisterView(APIView):
             415: OpenApiResponse(
                 response=DetailResponseSerializer,
                 description="Тело запроса передано не как JSON.",
+            ),
+            429: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Превышен лимит регистрации или отправки писем.",
             ),
             503: OpenApiResponse(
                 response=DetailResponseSerializer,
@@ -405,6 +419,7 @@ class VerifyEmailView(APIView):
     authentication_classes = []
     permission_classes = (AllowAny,)
     parser_classes = (JSONParser,)
+    throttle_classes = (VerificationIPThrottle, VerificationEmailThrottle)
 
     @extend_schema(
         operation_id="auth_verify_email",
@@ -444,6 +459,10 @@ class VerifyEmailView(APIView):
             415: OpenApiResponse(
                 response=DetailResponseSerializer,
                 description="Тело запроса передано не как JSON.",
+            ),
+            429: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Превышен лимит проверки кода подтверждения.",
             ),
         },
         examples=[
@@ -531,6 +550,7 @@ class VerifyEmailView(APIView):
 class LoginView(APIView):
     authentication_classes = []
     permission_classes = (AllowAny,)
+    throttle_classes = (LoginIPThrottle, LoginEmailThrottle)
 
     @extend_schema(
         operation_id="auth_login",
@@ -570,6 +590,10 @@ class LoginView(APIView):
             415: OpenApiResponse(
                 response=DetailResponseSerializer,
                 description="Неподдерживаемый Content-Type запроса.",
+            ),
+            429: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Превышен лимит попыток входа.",
             ),
         },
         examples=[

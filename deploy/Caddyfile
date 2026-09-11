@@ -3,6 +3,14 @@ xn--e1aamodgc0e.xn--p1ai {
 		@private_docs path /api/docs* /api/schema* /api/redoc*
 		respond @private_docs 404
 
+		@bookUpload {
+			method POST
+			path /api/knowledge/books/
+		}
+		request_body @bookUpload {
+			max_size 90MiB
+		}
+
 		handle /api/* {
 			reverse_proxy backend:8000
 		}

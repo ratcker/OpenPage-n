@@ -10,6 +10,8 @@ from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from core.throttles import ArticleImageUploadThrottle
+
 from .article_serializers import (
     ArticleImageSerializer,
     ArticleImageUploadSerializer,
@@ -218,7 +220,10 @@ class ArticleDetailView(GenericAPIView):
     @extend_schema(
         operation_id="knowledge_articles_delete",
         summary="Удалить статью",
-        description="Удаляет статью автора и связанные с ней изображения.",
+        description=(
+            "Удаляет статью автора и ставит связанные изображения в очередь "
+            "очистки storage."
+        ),
         tags=[KNOWLEDGE_TAG],
         request=None,
         responses={
@@ -232,9 +237,8 @@ class ArticleDetailView(GenericAPIView):
         article = self.get_article(article_uuid)
         if article.created_by_id != request.user.id:
             raise PermissionDenied("Удалять статью может только её автор.")
-        storage = get_knowledge_storage()
         try:
-            delete_article(article=article, storage=storage)
+            delete_article(article=article)
         except Exception as error:
             raise APIException("Не удалось удалить статью.") from error
         return Response(status=status.HTTP_204_NO_CONTENT)
@@ -269,6 +273,7 @@ class ArticleImageUploadView(GenericAPIView):
     permission_classes = (IsAuthenticated,)
     parser_classes = (MultiPartParser,)
     serializer_class = ArticleImageUploadSerializer
+    throttle_classes = (ArticleImageUploadThrottle,)
 
     @extend_schema(
         operation_id="knowledge_article_images_upload",
@@ -286,6 +291,10 @@ class ArticleImageUploadView(GenericAPIView):
             403: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             404: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             410: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            429: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Превышен лимит загрузки изображений.",
+            ),
         },
     )
     def post(self, request, session_uuid):

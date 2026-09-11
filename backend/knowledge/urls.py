@@ -13,6 +13,7 @@ from .views import (
     BookContentView,
     BookDetailView,
     BookListView,
+    BookProgressView,
     EpubPreviewView,
     KnowledgeProfileAvatarView,
     KnowledgeProfileView,
@@ -65,6 +66,11 @@ urlpatterns = [
         "books/<uuid:book_uuid>/content/",
         BookContentView.as_view(),
         name="knowledge_book_content",
+    ),
+    path(
+        "books/<uuid:book_uuid>/progress/",
+        BookProgressView.as_view(),
+        name="knowledge_book_progress",
     ),
     path("library/", LibraryListView.as_view(), name="knowledge_library"),
     path(

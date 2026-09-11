@@ -15,6 +15,7 @@ from accounts.models import User
 
 from .models import Book, KnowledgeProfile, UserLibraryBook
 from .storage import LocalKnowledgeStorage, book_storage_key
+from .test_helpers import make_epub, make_pdf
 
 
 class StubContentStorage:
@@ -90,10 +91,11 @@ class BookUploadAPITests(KnowledgeAPITestCase):
 
     def upload_data(self, *, format=Book.Format.EPUB, visibility=None):
         extension = "pdf" if format == Book.Format.PDF else "epub"
+        content = make_pdf() if format == Book.Format.PDF else make_epub()
         return {
             "file": SimpleUploadedFile(
                 f"user-file.{extension}",
-                f"{format} content".encode(),
+                content,
                 content_type="application/octet-stream",
             ),
             "title": "Загруженная книга",
@@ -123,7 +125,7 @@ class BookUploadAPITests(KnowledgeAPITestCase):
         storage = LocalKnowledgeStorage()
         self.assertTrue(storage.exists(book.storage_key))
         with storage.open(book.storage_key) as stored_file:
-            self.assertEqual(stored_file.read(), b"epub content")
+            self.assertEqual(stored_file.read(), make_epub())
 
     def test_author_can_upload_pdf(self):
         response = self.client.post(
@@ -141,7 +143,7 @@ class BookUploadAPITests(KnowledgeAPITestCase):
         self.assertEqual(book.visibility, Book.Visibility.PUBLIC)
         self.assertEqual(book.storage_key, f"books/{book.id}/original.pdf")
         with LocalKnowledgeStorage().open(book.storage_key) as stored_file:
-            self.assertEqual(stored_file.read(), b"pdf content")
+            self.assertEqual(stored_file.read(), make_pdf())
 
     def test_user_without_knowledge_profile_gets_forbidden(self):
         self.authenticate(self.other_user)
@@ -552,6 +554,9 @@ class LibraryProgressAPITests(KnowledgeAPITestCase):
     def progress_url(self, book):
         return reverse("knowledge_library_progress", kwargs={"book_uuid": book.id})
 
+    def read_progress_url(self, book):
+        return reverse("knowledge_book_progress", kwargs={"book_uuid": book.id})
+
     def progress_data(self, **changes):
         data = {
             "reading_location": {"type": "epub", "location": "epubcfi(/6/4)"},
@@ -571,6 +576,60 @@ class LibraryProgressAPITests(KnowledgeAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
         self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_anonymous_progress_read_is_rejected(self):
+        book = self.create_model_book()
+
+        response = self.client.get(self.read_progress_url(book))
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_progress_read_without_library_entry_returns_nulls(self):
+        book = self.create_model_book()
+        self.authenticate()
+
+        response = self.client.get(self.read_progress_url(book))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data,
+            {
+                "reading_location": None,
+                "reading_percentage": None,
+                "updated_at": None,
+            },
+        )
+        self.assertFalse(UserLibraryBook.objects.exists())
+
+    def test_progress_read_finds_the_twenty_first_library_book(self):
+        self.authenticate()
+        for number in range(21):
+            book = self.create_model_book(title=f"Книга {number:02d}")
+            UserLibraryBook.objects.create(user=self.user, book=book)
+        target = UserLibraryBook.objects.order_by("-added_at", "-id")[20]
+        target.reading_location = {"type": "epub", "location": "epubcfi(/6/42)"}
+        target.reading_percentage = Decimal("68.25")
+        target.save(
+            update_fields=("reading_location", "reading_percentage", "updated_at")
+        )
+
+        second_page = self.client.get(reverse("knowledge_library"), {"page": 2})
+        response = self.client.get(self.read_progress_url(target.book))
+
+        self.assertEqual(second_page.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            [item["book"]["id"] for item in second_page.data["results"]],
+            [str(target.book_id)],
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data["reading_location"],
+            {"type": "epub", "location": "epubcfi(/6/42)"},
+        )
+        self.assertEqual(response.data["reading_percentage"], "68.25")
+        self.assertIsNotNone(response.data["updated_at"])
+        self.assertEqual(UserLibraryBook.objects.filter(user=self.user).count(), 21)
 
     def test_public_progress_creates_relation_and_saves_values(self):
         book = self.create_model_book()

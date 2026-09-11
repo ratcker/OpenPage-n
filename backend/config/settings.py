@@ -116,6 +116,21 @@ KNOWLEDGE_CONTENT_URL_TTL_SECONDS = int(
 KNOWLEDGE_ARTICLE_UPLOAD_TTL_SECONDS = int(
     os.environ.get("KNOWLEDGE_ARTICLE_UPLOAD_TTL_SECONDS", "86400")
 )
+KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES = int(
+    os.environ.get("KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES", str(75 * 1024 * 1024))
+)
+if KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES <= 0:
+    raise ImproperlyConfigured("KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES must be positive.")
+
+# Счётчики запросов хранятся в PostgreSQL и общие для всех воркеров Gunicorn.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "openpage_cache",
+        "KEY_PREFIX": "openpage",
+        "OPTIONS": {"MAX_ENTRIES": 100_000},
+    }
+}
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
@@ -160,6 +175,27 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_login_ip": os.environ.get("DRF_THROTTLE_AUTH_LOGIN_IP_RATE", "30/hour"),
+        "auth_login_email": os.environ.get(
+            "DRF_THROTTLE_AUTH_LOGIN_EMAIL_RATE", "10/hour"
+        ),
+        "auth_register_ip": os.environ.get(
+            "DRF_THROTTLE_AUTH_REGISTER_IP_RATE", "10/hour"
+        ),
+        "auth_register_email": os.environ.get(
+            "DRF_THROTTLE_AUTH_REGISTER_EMAIL_RATE", "3/hour"
+        ),
+        "auth_email_ip": os.environ.get("DRF_THROTTLE_AUTH_EMAIL_IP_RATE", "30/hour"),
+        "auth_email": os.environ.get("DRF_THROTTLE_AUTH_EMAIL_RATE", "10/hour"),
+        "knowledge_book_upload": os.environ.get(
+            "DRF_THROTTLE_KNOWLEDGE_BOOK_UPLOAD_RATE", "10/hour"
+        ),
+        "knowledge_article_image_upload": os.environ.get(
+            "DRF_THROTTLE_KNOWLEDGE_ARTICLE_IMAGE_UPLOAD_RATE", "60/hour"
+        ),
+    },
+    "NUM_PROXIES": int(os.environ.get("DRF_NUM_PROXIES", "1")),
 }
 
 SPECTACULAR_SETTINGS = {

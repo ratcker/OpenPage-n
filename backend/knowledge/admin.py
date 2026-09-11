@@ -1,18 +1,20 @@
 from django.contrib import admin
 
+from .admin_mixins import StorageCleanupAdminMixin
 from .models import (
     Article,
     ArticleImage,
     ArticleImageUploadSession,
     Book,
     KnowledgeProfile,
+    StorageCleanupJob,
     UserLibraryBook,
 )
 
 
 # Профили авторов материалов
 @admin.register(KnowledgeProfile)
-class KnowledgeProfileAdmin(admin.ModelAdmin):
+class KnowledgeProfileAdmin(StorageCleanupAdminMixin, admin.ModelAdmin):
     list_display = ("user", "display_name", "public_id")
     search_fields = ("user__email", "user__name", "display_name")
     readonly_fields = ("public_id",)
@@ -21,7 +23,7 @@ class KnowledgeProfileAdmin(admin.ModelAdmin):
 
 # Глобальный каталог книг
 @admin.register(Book)
-class BookAdmin(admin.ModelAdmin):
+class BookAdmin(StorageCleanupAdminMixin, admin.ModelAdmin):
     list_display = (
         "title",
         "author",
@@ -63,7 +65,7 @@ class UserLibraryBookAdmin(admin.ModelAdmin):
 
 
 @admin.register(Article)
-class ArticleAdmin(admin.ModelAdmin):
+class ArticleAdmin(StorageCleanupAdminMixin, admin.ModelAdmin):
     list_display = ("title", "visibility", "created_by", "created_at")
     list_filter = ("visibility",)
     search_fields = ("title", "body", "created_by__email")
@@ -73,7 +75,7 @@ class ArticleAdmin(admin.ModelAdmin):
 
 
 @admin.register(ArticleImageUploadSession)
-class ArticleImageUploadSessionAdmin(admin.ModelAdmin):
+class ArticleImageUploadSessionAdmin(StorageCleanupAdminMixin, admin.ModelAdmin):
     list_display = ("id", "user", "article", "created_at")
     readonly_fields = ("id", "created_at")
     raw_id_fields = ("user", "article")
@@ -81,8 +83,31 @@ class ArticleImageUploadSessionAdmin(admin.ModelAdmin):
 
 
 @admin.register(ArticleImage)
-class ArticleImageAdmin(admin.ModelAdmin):
+class ArticleImageAdmin(StorageCleanupAdminMixin, admin.ModelAdmin):
     list_display = ("id", "upload_session", "content_type", "created_at")
     readonly_fields = ("id", "created_at")
     raw_id_fields = ("upload_session",)
+    ordering = ("-created_at",)
+
+
+@admin.register(StorageCleanupJob)
+class StorageCleanupJobAdmin(admin.ModelAdmin):
+    list_display = (
+        "storage_key",
+        "reason",
+        "attempts",
+        "created_at",
+        "completed_at",
+    )
+    list_filter = ("reason", "completed_at")
+    search_fields = ("storage_key", "last_error")
+    readonly_fields = (
+        "id",
+        "storage_key",
+        "reason",
+        "attempts",
+        "last_error",
+        "created_at",
+        "completed_at",
+    )
     ordering = ("-created_at",)

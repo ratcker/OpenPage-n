@@ -1,5 +1,6 @@
 import posixpath
 import re
+import zlib
 from dataclasses import dataclass
 from datetime import date
 from io import BytesIO
@@ -129,12 +130,13 @@ def _find_cover_item(metadata, manifest):
     )
 
 
-def extract_epub_metadata(file):
+def extract_epub_metadata(file, *, max_file_bytes=MAX_EPUB_BYTES):
     """Читает только container.xml, OPF и найденную обложку из EPUB."""
     if isinstance(file, (bytes, bytearray)):
         file = BytesIO(bytes(file))
-    if (_file_size(file) or 0) > MAX_EPUB_BYTES:
-        raise InvalidEpubError("EPUB не должен превышать 50 МБ.")
+    if (_file_size(file) or 0) > max_file_bytes:
+        limit_mb = max_file_bytes // (1024 * 1024)
+        raise InvalidEpubError(f"EPUB не должен превышать {limit_mb} МБ.")
     if hasattr(file, "seek"):
         file.seek(0)
 
@@ -158,9 +160,21 @@ def extract_epub_metadata(file):
                     raise InvalidEpubError("EPUB содержит небезопасный путь.")
                 names.add(entry.filename)
 
+            if (
+                not entries
+                or entries[0].filename != "mimetype"
+                or entries[0].compress_type != 0
+                or _read_entry(archive, "mimetype", 20) != b"application/epub+zip"
+            ):
+                raise InvalidEpubError("Файл не является корректным пакетом EPUB.")
+            if archive.testzip() is not None:
+                raise InvalidEpubError("EPUB содержит повреждённые данные.")
+
             container = _safe_xml(
                 _read_entry(archive, "META-INF/container.xml", MAX_XML_BYTES)
             )
+            if _local_name(container.tag) != "container":
+                raise InvalidEpubError("EPUB содержит некорректный container.xml.")
             rootfile = next(
                 (
                     element
@@ -177,6 +191,8 @@ def extract_epub_metadata(file):
                 raise InvalidEpubError("EPUB не содержит корректный package document.")
 
             package = _safe_xml(_read_entry(archive, opf_path, MAX_XML_BYTES))
+            if _local_name(package.tag) != "package":
+                raise InvalidEpubError("EPUB содержит некорректный package document.")
             metadata = next(
                 (item for item in package if _local_name(item.tag) == "metadata"),
                 None,
@@ -217,7 +233,14 @@ def extract_epub_metadata(file):
                         result.cover = cover
                         result.cover_media_type = media_type
             return result
-    except (BadZipFile, OSError, RuntimeError, ValueError) as error:
+    except (
+        BadZipFile,
+        EOFError,
+        OSError,
+        RuntimeError,
+        ValueError,
+        zlib.error,
+    ) as error:
         if isinstance(error, InvalidEpubError):
             raise
         raise InvalidEpubError("Файл не является корректным EPUB.") from error

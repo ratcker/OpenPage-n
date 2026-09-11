@@ -196,6 +196,17 @@ class ReadingProgressSerializer(serializers.Serializer):
         return attrs
 
 
+class BookProgressSerializer(serializers.Serializer):
+    reading_location = serializers.JSONField(allow_null=True, read_only=True)
+    reading_percentage = serializers.DecimalField(
+        max_digits=5,
+        decimal_places=2,
+        allow_null=True,
+        read_only=True,
+    )
+    updated_at = serializers.DateTimeField(allow_null=True, read_only=True)
+
+
 class BookContentSerializer(serializers.Serializer):
     url = serializers.URLField(read_only=True)
     expires_in = serializers.IntegerField(read_only=True)

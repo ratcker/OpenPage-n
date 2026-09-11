@@ -45,6 +45,9 @@ class DocumentationTests(SimpleTestCase):
             "/api/knowledge/books/{book_uuid}/content/": {
                 "get": "knowledge_books_content_retrieve"
             },
+            "/api/knowledge/books/{book_uuid}/progress/": {
+                "get": "knowledge_books_progress_retrieve"
+            },
             "/api/knowledge/library/": {"get": "knowledge_library_list"},
             "/api/knowledge/library/{book_uuid}/": {"post": "knowledge_library_add"},
             "/api/knowledge/library/{book_uuid}/progress/": {
@@ -105,6 +108,7 @@ class DocumentationTests(SimpleTestCase):
             ("/api/knowledge/books/", "post"),
             ("/api/knowledge/books/preview/", "post"),
             ("/api/knowledge/books/{book_uuid}/", "patch"),
+            ("/api/knowledge/books/{book_uuid}/progress/", "get"),
             ("/api/knowledge/library/", "get"),
             ("/api/knowledge/library/{book_uuid}/", "post"),
             ("/api/knowledge/library/{book_uuid}/progress/", "patch"),
@@ -204,6 +208,23 @@ class DocumentationTests(SimpleTestCase):
         ]["post"]
         content = upload["requestBody"]["content"]
         self.assertEqual(set(content), {"multipart/form-data"})
+
+    def test_sensitive_operations_document_rate_limit_response(self):
+        schema = self.schema()
+        operations = (
+            ("/api/auth/login/", "post"),
+            ("/api/auth/register/", "post"),
+            ("/api/auth/verify-email/", "post"),
+            ("/api/knowledge/books/", "post"),
+            (
+                "/api/knowledge/articles/upload-sessions/{session_uuid}/images/",
+                "post",
+            ),
+        )
+
+        for path, method in operations:
+            with self.subTest(path=path):
+                self.assertIn("429", schema["paths"][path][method]["responses"])
 
     def test_swagger_uses_openpage_template_and_static(self):
         response = self.client.get(reverse("swagger-ui"))

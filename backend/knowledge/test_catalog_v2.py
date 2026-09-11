@@ -4,7 +4,6 @@ from io import BytesIO
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
-from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import IntegrityError
@@ -17,66 +16,18 @@ from rest_framework_simplejwt.tokens import RefreshToken
 from accounts.models import User
 
 from .epub import InvalidEpubError, extract_epub_metadata
-from .models import Book, KnowledgeProfile, UserLibraryBook
+from .models import Book, KnowledgeProfile, StorageCleanupJob, UserLibraryBook
 from .services import create_book, update_book_metadata
 from .storage import LocalKnowledgeStorage, book_cover_storage_key, book_storage_key
+from .test_helpers import make_epub, make_pdf
 
 JPEG = b"\xff\xd8\xff\xe0test-cover"
 PNG = b"\x89PNG\r\n\x1a\ntest-cover"
 
 
-def make_epub(*, metadata=True, cover=JPEG, container=None, extra_entries=None):
-    metadata_xml = ""
-    if metadata:
-        metadata_xml = """
-            <dc:title>Книга из EPUB</dc:title>
-            <dc:creator>Автор EPUB</dc:creator>
-            <dc:language>ru</dc:language>
-            <dc:publisher>Издательство</dc:publisher>
-            <dc:date>2024-05-10</dc:date>
-            <meta name="cover" content="cover-image" />
-        """
-    cover_item = (
-        '<item id="cover-image" href="images/cover.jpg" '
-        'media-type="image/jpeg" properties="cover-image" />'
-        if cover is not None
-        else ""
-    )
-    opf = f"""<?xml version="1.0"?>
-        <package xmlns="http://www.idpf.org/2007/opf"
-                 xmlns:dc="http://purl.org/dc/elements/1.1/">
-          <metadata>{metadata_xml}</metadata>
-          <manifest>{cover_item}</manifest>
-        </package>
-    """
-    container = (
-        container
-        or """<?xml version="1.0"?>
-        <container xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
-          <rootfiles><rootfile full-path="OEBPS/content.opf" /></rootfiles>
-        </container>
-    """
-    )
-
-    output = BytesIO()
-    with ZipFile(output, "w") as archive:
-        archive.writestr("mimetype", "application/epub+zip", compress_type=ZIP_STORED)
-        archive.writestr(
-            "META-INF/container.xml",
-            container,
-            compress_type=ZIP_DEFLATED,
-        )
-        archive.writestr("OEBPS/content.opf", opf, compress_type=ZIP_DEFLATED)
-        if cover is not None:
-            archive.writestr("OEBPS/images/cover.jpg", cover)
-        for name, content in extra_entries or ():
-            archive.writestr(name, content)
-    return output.getvalue()
-
-
 class EpubExtractionTests(TestCase):
     def test_extracts_metadata_and_cover(self):
-        result = extract_epub_metadata(BytesIO(make_epub()))
+        result = extract_epub_metadata(BytesIO(make_epub(cover=JPEG)))
 
         self.assertEqual(result.title, "Книга из EPUB")
         self.assertEqual(result.author, "Автор EPUB")
@@ -285,7 +236,7 @@ class BookMetadataUploadAPITests(CatalogV2APITestCase):
     def test_epub_and_pdf_without_cover_upload_successfully(self):
         epub_data = self.upload_data(file=self.epub_file(make_epub(cover=None)))
         pdf_data = self.upload_data(
-            file=SimpleUploadedFile("book.pdf", b"%PDF content"),
+            file=SimpleUploadedFile("book.pdf", make_pdf()),
             format=Book.Format.PDF,
         )
 
@@ -299,7 +250,7 @@ class BookMetadataUploadAPITests(CatalogV2APITestCase):
         response = self.client.post(
             self.url,
             self.upload_data(
-                file=SimpleUploadedFile("book.pdf", b"%PDF content"),
+                file=SimpleUploadedFile("book.pdf", make_pdf()),
                 format=Book.Format.PDF,
                 cover=self.cover_file(),
             ),
@@ -308,6 +259,86 @@ class BookMetadataUploadAPITests(CatalogV2APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         self.assertTrue(Book.objects.get().cover_key)
+
+    def test_invalid_book_content_is_rejected_before_storage(self):
+        corrupted_epub = make_epub().replace(b"test-cover", b"best-cover", 1)
+        invalid_uploads = (
+            ("fake.pdf", b"not a PDF", Book.Format.PDF),
+            ("fake.epub", b"not a ZIP archive", Book.Format.EPUB),
+            ("book.pdf", make_pdf(), Book.Format.EPUB),
+            ("book.epub", make_epub(), Book.Format.PDF),
+            ("corrupted.pdf", make_pdf()[:-6], Book.Format.PDF),
+            ("corrupted.epub", corrupted_epub, Book.Format.EPUB),
+        )
+
+        for name, content, declared_format in invalid_uploads:
+            with self.subTest(name=name, declared_format=declared_format):
+                file = SimpleUploadedFile(name, content)
+                with patch(
+                    "knowledge.services.get_knowledge_storage",
+                    side_effect=AssertionError("storage must not be used"),
+                ):
+                    response = self.client.post(
+                        self.url,
+                        self.upload_data(file=file, format=declared_format),
+                        format="multipart",
+                    )
+
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("file", response.data)
+                self.assertFalse(Book.objects.exists())
+
+    def test_manual_cover_does_not_bypass_book_validation(self):
+        with patch(
+            "knowledge.services.get_knowledge_storage",
+            side_effect=AssertionError("storage must not be used"),
+        ):
+            response = self.client.post(
+                self.url,
+                self.upload_data(
+                    file=SimpleUploadedFile("book.epub", b"invalid EPUB"),
+                    cover=self.cover_file(),
+                ),
+                format="multipart",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Book.objects.filter(status=Book.Status.READY).exists())
+        self.assertFalse(Book.objects.exists())
+
+    def test_book_at_configured_size_limit_is_accepted(self):
+        content = make_pdf()
+        with override_settings(KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES=len(content)):
+            response = self.client.post(
+                self.url,
+                self.upload_data(
+                    file=SimpleUploadedFile("book.pdf", content),
+                    format=Book.Format.PDF,
+                ),
+                format="multipart",
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(Book.objects.get().status, Book.Status.READY)
+
+    def test_book_over_configured_size_limit_is_rejected_without_side_effects(self):
+        content = make_pdf()
+        with override_settings(KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES=len(content) - 1):
+            with patch(
+                "knowledge.services.get_knowledge_storage",
+                side_effect=AssertionError("storage must not be used"),
+            ):
+                response = self.client.post(
+                    self.url,
+                    self.upload_data(
+                        file=SimpleUploadedFile("book.pdf", content),
+                        format=Book.Format.PDF,
+                    ),
+                    format="multipart",
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(Book.objects.exists())
 
     def test_invalid_year_and_cover_are_rejected(self):
         invalid_data = (
@@ -401,7 +432,7 @@ class BookMetadataPatchAPITests(CatalogV2APITestCase):
         for field, value in original.items():
             self.assertEqual(getattr(self.book, field), value)
 
-    def test_cover_replacement_deletes_old_cover_after_success(self):
+    def test_cover_replacement_enqueues_old_cover(self):
         storage = LocalKnowledgeStorage()
         old_key = book_cover_storage_key(self.book.id, "image/jpeg")
         storage.save(old_key, JPEG)
@@ -418,8 +449,10 @@ class BookMetadataPatchAPITests(CatalogV2APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.book.refresh_from_db()
         self.assertNotEqual(self.book.cover_key, old_key)
-        self.assertFalse(storage.exists(old_key))
+        self.assertTrue(storage.exists(old_key))
         self.assertTrue(storage.exists(self.book.cover_key))
+        job = StorageCleanupJob.objects.get(storage_key=old_key)
+        self.assertEqual(job.reason, "book_cover_replaced")
 
     def test_cover_save_failure_keeps_old_cover(self):
         class FailingStorage(LocalKnowledgeStorage):
@@ -474,7 +507,7 @@ class CreateBookCoverCleanupTests(TestCase):
             with self.assertRaises(OSError):
                 create_book(
                     user=user,
-                    content=b"epub",
+                    content=make_epub(),
                     title="Книга",
                     author="Автор",
                     description="",

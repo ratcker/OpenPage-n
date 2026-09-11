@@ -21,6 +21,9 @@ import BookUploadDialog from './BookUploadDialog.jsx';
 const initialCollectionState = {
   status: 'loading',
   items: [],
+  count: 0,
+  next: null,
+  previous: null,
 };
 
 const initialArticlesState = {
@@ -30,6 +33,16 @@ const initialArticlesState = {
   next: null,
   previous: null,
 };
+
+function loadedCollection(data) {
+  return {
+    status: 'success',
+    items: data.results,
+    count: data.count,
+    next: data.next,
+    previous: data.previous,
+  };
+}
 
 function CatalogBookAction({
   book,
@@ -98,9 +111,11 @@ function BookCollection({
   emptyDescription,
   errorTitle,
   loadingLabel,
+  page,
   library = false,
   renderBookAction,
   onEditBook,
+  onPageChange,
 }) {
   let content;
 
@@ -159,6 +174,25 @@ function BookCollection({
         <p>{description}</p>
       </div>
       {content}
+      {state.status === 'success' && (state.next || state.previous) && (
+        <nav className="knowledge-pagination" aria-label={`Страницы: ${title}`}>
+          <button
+            type="button"
+            disabled={!state.previous}
+            onClick={() => onPageChange(page - 1)}
+          >
+            Назад
+          </button>
+          <span>Страница {page}</span>
+          <button
+            type="button"
+            disabled={!state.next}
+            onClick={() => onPageChange(page + 1)}
+          >
+            Далее
+          </button>
+        </nav>
+      )}
     </section>
   );
 }
@@ -166,13 +200,17 @@ function BookCollection({
 function BooksView({
   authStatus,
   booksState,
+  booksPage,
   libraryState,
+  libraryPage,
   profileState,
   libraryBookIds,
   addingBookId,
   addError,
   onAddBook,
+  onBooksPageChange,
   onEditBook,
+  onLibraryPageChange,
   onCreateProfile,
   onEditProfile,
   onOpenUpload,
@@ -193,12 +231,14 @@ function BooksView({
           title="Ваши книги"
           description="Сохранённые материалы и прогресс чтения."
           state={libraryState}
+          page={libraryPage}
           emptyTitle="В вашей библиотеке пока нет книг."
           emptyDescription="Здесь появятся книги из вашей личной коллекции."
           errorTitle="Не удалось загрузить библиотеку."
           loadingLabel="Загружаем вашу библиотеку…"
           library
           onEditBook={onEditBook}
+          onPageChange={onLibraryPageChange}
         />
 
         <BookCollection
@@ -207,11 +247,13 @@ function BooksView({
           title="Публичные книги"
           description="Новые доступные всем материалы."
           state={booksState}
+          page={booksPage}
           emptyTitle="Публичных книг пока нет."
           emptyDescription="Каталог наполнится, когда появятся общедоступные книги."
           errorTitle="Не удалось загрузить каталог."
           loadingLabel="Загружаем публичные книги…"
           onEditBook={onEditBook}
+          onPageChange={onBooksPageChange}
           renderBookAction={(book) => (
             <CatalogBookAction
               book={book}
@@ -414,6 +456,8 @@ export default function KnowledgePage() {
   );
   const [booksState, setBooksState] = useState(initialCollectionState);
   const [libraryState, setLibraryState] = useState(initialCollectionState);
+  const [booksPage, setBooksPage] = useState(1);
+  const [libraryPage, setLibraryPage] = useState(1);
   const [profileState, setProfileState] = useState({ status: 'loading', profile: null });
   const [addingBookId, setAddingBookId] = useState(null);
   const [addError, setAddError] = useState(null);
@@ -429,33 +473,54 @@ export default function KnowledgePage() {
     if (authStatus === 'loading') return undefined;
 
     let isActive = true;
+    setBooksState(initialCollectionState);
 
-    getKnowledgeBooks()
+    getKnowledgeBooks(booksPage, authStatus === 'authenticated')
       .then((data) => {
-        if (isActive) setBooksState({ status: 'success', items: data.results });
+        if (isActive) setBooksState(loadedCollection(data));
       })
       .catch(() => {
-        if (isActive) setBooksState({ status: 'error', items: [] });
+        if (isActive) setBooksState({ ...initialCollectionState, status: 'error' });
       });
+
+    return () => {
+      isActive = false;
+    };
+  }, [authStatus, booksPage]);
+
+  useEffect(() => {
+    if (authStatus === 'loading') return undefined;
 
     if (authStatus === 'anonymous') {
-      setLibraryState({ status: 'anonymous', items: [] });
-      setProfileState({ status: 'anonymous', profile: null });
-      return () => {
-        isActive = false;
-      };
+      setLibraryState({ ...initialCollectionState, status: 'anonymous' });
+      return undefined;
     }
 
+    let isActive = true;
     setLibraryState(initialCollectionState);
-    setProfileState({ status: 'loading', profile: null });
 
-    getKnowledgeLibrary()
+    getKnowledgeLibrary(libraryPage)
       .then((data) => {
-        if (isActive) setLibraryState({ status: 'success', items: data.results });
+        if (isActive) setLibraryState(loadedCollection(data));
       })
       .catch(() => {
-        if (isActive) setLibraryState({ status: 'error', items: [] });
+        if (isActive) setLibraryState({ ...initialCollectionState, status: 'error' });
       });
+
+    return () => {
+      isActive = false;
+    };
+  }, [authStatus, libraryPage]);
+
+  useEffect(() => {
+    if (authStatus === 'loading') return undefined;
+    if (authStatus === 'anonymous') {
+      setProfileState({ status: 'anonymous', profile: null });
+      return undefined;
+    }
+
+    let isActive = true;
+    setProfileState({ status: 'loading', profile: null });
 
     getKnowledgeProfile()
       .then((profile) => {
@@ -485,8 +550,10 @@ export default function KnowledgePage() {
       setLibraryState((current) => {
         const alreadyAdded = current.items.some((item) => item.book.id === bookId);
         return {
+          ...current,
           status: 'success',
-          items: alreadyAdded ? current.items : [entry, ...current.items],
+          count: alreadyAdded ? current.count : current.count + 1,
+          items: alreadyAdded ? current.items : [entry, ...current.items].slice(0, 20),
         };
       });
     } catch {
@@ -501,16 +568,16 @@ export default function KnowledgePage() {
 
   async function handleBookUploaded(book) {
     const updates = [
-      getKnowledgeLibrary()
-        .then((data) => setLibraryState({ status: 'success', items: data.results }))
-        .catch(() => setLibraryState({ status: 'error', items: [] })),
+      getKnowledgeLibrary(libraryPage)
+        .then((data) => setLibraryState(loadedCollection(data)))
+        .catch(() => setLibraryState({ ...initialCollectionState, status: 'error' })),
     ];
 
     if (book.visibility === 'public') {
       updates.push(
-        getKnowledgeBooks()
-          .then((data) => setBooksState({ status: 'success', items: data.results }))
-          .catch(() => setBooksState({ status: 'error', items: [] })),
+        getKnowledgeBooks(booksPage, true)
+          .then((data) => setBooksState(loadedCollection(data)))
+          .catch(() => setBooksState({ ...initialCollectionState, status: 'error' })),
       );
     }
 
@@ -519,12 +586,12 @@ export default function KnowledgePage() {
 
   async function handleBookUpdated() {
     await Promise.all([
-      getKnowledgeLibrary()
-        .then((data) => setLibraryState({ status: 'success', items: data.results }))
-        .catch(() => setLibraryState({ status: 'error', items: [] })),
-      getKnowledgeBooks()
-        .then((data) => setBooksState({ status: 'success', items: data.results }))
-        .catch(() => setBooksState({ status: 'error', items: [] })),
+      getKnowledgeLibrary(libraryPage)
+        .then((data) => setLibraryState(loadedCollection(data)))
+        .catch(() => setLibraryState({ ...initialCollectionState, status: 'error' })),
+      getKnowledgeBooks(booksPage, true)
+        .then((data) => setBooksState(loadedCollection(data)))
+        .catch(() => setBooksState({ ...initialCollectionState, status: 'error' })),
     ]);
   }
 
@@ -570,13 +637,17 @@ export default function KnowledgePage() {
             <BooksView
               authStatus={authStatus}
               booksState={booksState}
+              booksPage={booksPage}
               libraryState={libraryState}
+              libraryPage={libraryPage}
               profileState={profileState}
               libraryBookIds={libraryBookIds}
               addingBookId={addingBookId}
               addError={addError}
               onAddBook={handleAddBook}
+              onBooksPageChange={setBooksPage}
               onEditBook={setEditingBook}
+              onLibraryPageChange={setLibraryPage}
               onCreateProfile={() => setProfileDialogMode('create')}
               onEditProfile={() => setProfileDialogMode('edit')}
               onOpenUpload={() => setIsUploadOpen(true)}

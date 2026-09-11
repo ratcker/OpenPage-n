@@ -13,8 +13,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
 
-from .models import Book, KnowledgeProfile
+from .models import Book, KnowledgeProfile, StorageCleanupJob
 from .storage import LocalKnowledgeStorage, book_storage_key
+from .test_helpers import make_pdf
 
 PNG = b"\x89PNG\r\n\x1a\ntest-avatar"
 
@@ -182,7 +183,7 @@ class KnowledgeProfileCreateAPITests(AuthorProfileAPITestCase):
         response = self.client.post(
             reverse("knowledge_books"),
             {
-                "file": SimpleUploadedFile("book.pdf", b"pdf content"),
+                "file": SimpleUploadedFile("book.pdf", make_pdf()),
                 "title": "Новая книга",
                 "author": "Автор книги",
                 "description": "",
@@ -243,7 +244,7 @@ class KnowledgeProfileUpdateAPITests(AuthorProfileAPITestCase):
         self.assertEqual(profile.display_name, "Автор материалов")
         self.assertEqual(profile.avatar, "")
 
-    def test_avatar_replacement_removes_old_object_after_success(self):
+    def test_avatar_replacement_enqueues_old_object(self):
         storage = LocalKnowledgeStorage()
         old_key = f"profiles/{uuid.uuid4()}/avatars/{uuid.uuid4()}.jpg"
         storage.save(old_key, b"old avatar")
@@ -259,7 +260,9 @@ class KnowledgeProfileUpdateAPITests(AuthorProfileAPITestCase):
         profile.refresh_from_db()
         self.assertNotEqual(profile.avatar, old_key)
         self.assertTrue(storage.exists(profile.avatar))
-        self.assertFalse(storage.exists(old_key))
+        self.assertTrue(storage.exists(old_key))
+        job = StorageCleanupJob.objects.get(storage_key=old_key)
+        self.assertEqual(job.reason, "profile_avatar_replaced")
 
     def test_storage_save_failure_keeps_old_avatar(self):
         storage = LocalKnowledgeStorage()
@@ -310,7 +313,7 @@ class KnowledgeProfileUpdateAPITests(AuthorProfileAPITestCase):
         stored_files = [path for path in self.media_root.rglob("*") if path.is_file()]
         self.assertEqual(len(stored_files), 1)
 
-    def test_failed_old_avatar_delete_rolls_back_reference_and_new_object(self):
+    def test_old_avatar_cleanup_failure_cannot_fail_profile_update(self):
         root = self.media_root / "knowledge"
         base_storage = LocalKnowledgeStorage(root=root)
         old_key = f"profiles/{uuid.uuid4()}/avatars/{uuid.uuid4()}.jpg"
@@ -325,12 +328,14 @@ class KnowledgeProfileUpdateAPITests(AuthorProfileAPITestCase):
                 format="multipart",
             )
 
-        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         profile.refresh_from_db()
-        self.assertEqual(profile.avatar, old_key)
+        self.assertNotEqual(profile.avatar, old_key)
         self.assertTrue(storage.exists(old_key))
+        self.assertTrue(storage.exists(profile.avatar))
+        self.assertTrue(StorageCleanupJob.objects.filter(storage_key=old_key).exists())
         stored_files = [path for path in root.rglob("*") if path.is_file()]
-        self.assertEqual(len(stored_files), 1)
+        self.assertEqual(len(stored_files), 2)
 
 
 class KnowledgeProfileAvatarDeleteAPITests(AuthorProfileAPITestCase):
@@ -338,7 +343,7 @@ class KnowledgeProfileAvatarDeleteAPITests(AuthorProfileAPITestCase):
         super().setUp()
         self.url = reverse("knowledge_profile_avatar")
 
-    def test_owner_deletes_avatar_and_receives_canonical_profile(self):
+    def test_owner_deletes_avatar_and_enqueues_storage_cleanup(self):
         storage = LocalKnowledgeStorage()
         key = f"profiles/{uuid.uuid4()}/avatars/{uuid.uuid4()}.png"
         storage.save(key, PNG)
@@ -350,7 +355,9 @@ class KnowledgeProfileAvatarDeleteAPITests(AuthorProfileAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         profile.refresh_from_db()
         self.assertEqual(profile.avatar, "")
-        self.assertFalse(storage.exists(key))
+        self.assertTrue(storage.exists(key))
+        job = StorageCleanupJob.objects.get(storage_key=key)
+        self.assertEqual(job.reason, "profile_avatar_deleted")
         self.assertIsNone(response.data["avatar_url"])
 
     def test_delete_without_avatar_is_idempotent(self):
@@ -373,7 +380,7 @@ class KnowledgeProfileAvatarDeleteAPITests(AuthorProfileAPITestCase):
         self.assertEqual(missing_response.status_code, status.HTTP_404_NOT_FOUND)
         self.assertEqual(anonymous_response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_storage_error_keeps_avatar_reference(self):
+    def test_storage_error_after_request_cannot_restore_avatar_reference(self):
         root = self.media_root / "knowledge"
         base_storage = LocalKnowledgeStorage(root=root)
         key = f"profiles/{uuid.uuid4()}/avatars/{uuid.uuid4()}.png"
@@ -385,10 +392,11 @@ class KnowledgeProfileAvatarDeleteAPITests(AuthorProfileAPITestCase):
         with patch("knowledge.views.get_knowledge_storage", return_value=storage):
             response = self.client.delete(self.url)
 
-        self.assertEqual(response.status_code, status.HTTP_500_INTERNAL_SERVER_ERROR)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
         profile.refresh_from_db()
-        self.assertEqual(profile.avatar, key)
+        self.assertEqual(profile.avatar, "")
         self.assertTrue(storage.exists(key))
+        self.assertTrue(StorageCleanupJob.objects.filter(storage_key=key).exists())
 
 
 class PublicAuthorAPITests(AuthorProfileAPITestCase):

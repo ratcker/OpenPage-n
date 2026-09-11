@@ -3,14 +3,20 @@ import uuid
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
+from .book_files import inspect_book_file
 from .covers import read_cover_image, read_image
-from .epub import InvalidEpubError, extract_epub_metadata
 from .models import Book, KnowledgeProfile, UserLibraryBook
 from .storage import (
     book_cover_storage_key,
     book_storage_key,
     get_knowledge_storage,
     profile_avatar_storage_key,
+)
+from .storage_cleanup import (
+    BOOK_COVER_REPLACED,
+    PROFILE_AVATAR_DELETED,
+    PROFILE_AVATAR_REPLACED,
+    enqueue_storage_cleanup,
 )
 
 
@@ -19,11 +25,10 @@ def _cleanup(storage, keys):
         try:
             storage.delete(key)
         except Exception:
-            # Cleanup не должен скрывать исходную ошибку операции.
+            # Сбой удаления не должен заменить исходную ошибку загрузки.
             pass
 
 
-# Создание книги остаётся одной явной доменной операцией.
 def create_book(
     *,
     user,
@@ -42,6 +47,8 @@ def create_book(
     if format not in Book.Format.values:
         raise ValidationError({"format": "Неподдерживаемый формат книги."})
 
+    preview = inspect_book_file(content, format)
+
     if storage is None:
         storage = get_knowledge_storage()
 
@@ -54,14 +61,9 @@ def create_book(
             cover,
             getattr(cover, "content_type", None),
         )
-    elif format == Book.Format.EPUB:
-        try:
-            preview = extract_epub_metadata(content)
-        except InvalidEpubError:
-            preview = None
-        if preview and preview.cover:
-            cover_content = preview.cover
-            cover_media_type = preview.cover_media_type
+    elif preview and preview.cover:
+        cover_content = preview.cover
+        cover_media_type = preview.cover_media_type
 
     cover_key = (
         book_cover_storage_key(book_id, cover_media_type)
@@ -90,7 +92,7 @@ def create_book(
             book.full_clean()
             book.save(force_insert=True)
 
-            # Файл не участвует в DB-транзакции, поэтому cleanup выполняется ниже.
+            # Файловое хранилище не откатывается вместе с БД, поэтому ключ запоминаем до записи.
             attempted_keys.append(storage_key)
             storage.save(storage_key, content)
             if not storage.exists(storage_key):
@@ -142,13 +144,13 @@ def update_book_metadata(*, book, data, storage=None):
                 setattr(book, field, value)
             book.full_clean()
             book.save(update_fields=(*changes.keys(), "updated_at"))
+            if new_cover_key and old_cover_key:
+                enqueue_storage_cleanup(old_cover_key, BOOK_COVER_REPLACED)
     except Exception:
         if new_cover_key:
             _cleanup(storage, [new_cover_key])
         raise
 
-    if new_cover_key and old_cover_key:
-        storage.delete(old_cover_key)
     return book
 
 
@@ -222,10 +224,8 @@ def update_knowledge_profile(*, profile, data, storage=None):
                 setattr(profile, field, value)
             profile.full_clean()
             profile.save(update_fields=changes.keys())
-
-            # При ошибке удаления DB-транзакция вернёт ссылку на старый avatar.
             if new_avatar_key and old_avatar_key:
-                storage.delete(old_avatar_key)
+                enqueue_storage_cleanup(old_avatar_key, PROFILE_AVATAR_REPLACED)
     except Exception:
         for field, value in old_values.items():
             setattr(profile, field, value)
@@ -237,20 +237,14 @@ def update_knowledge_profile(*, profile, data, storage=None):
     return profile
 
 
-def delete_knowledge_profile_avatar(*, profile, storage=None):
+def delete_knowledge_profile_avatar(*, profile):
     if not profile.avatar:
         return profile
-    if storage is None:
-        storage = get_knowledge_storage()
 
     old_avatar_key = profile.avatar
-    try:
-        with transaction.atomic():
-            profile.avatar = ""
-            profile.save(update_fields=("avatar",))
-            storage.delete(old_avatar_key)
-    except Exception:
-        profile.avatar = old_avatar_key
-        raise
+    with transaction.atomic():
+        profile.avatar = ""
+        profile.save(update_fields=("avatar",))
+        enqueue_storage_cleanup(old_avatar_key, PROFILE_AVATAR_DELETED)
 
     return profile

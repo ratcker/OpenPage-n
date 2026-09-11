@@ -13,11 +13,15 @@ from rest_framework.parsers import JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
+from core.throttles import BookUploadThrottle
+
+from .book_files import InvalidBookFile
 from .epub import InvalidEpubError, extract_epub_metadata
 from .models import Book, KnowledgeProfile, UserLibraryBook
 from .pagination import KnowledgePagination
 from .serializers import (
     BookContentSerializer,
+    BookProgressSerializer,
     BookSerializer,
     BookUpdateSerializer,
     BookUploadSerializer,
@@ -39,6 +43,7 @@ from .services import (
 from .storage import get_knowledge_storage
 
 KNOWLEDGE_TAG = "База знаний"
+BOOK_MAX_UPLOAD_MB = settings.KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES // (1024 * 1024)
 VALIDATION_ERROR_SCHEMA = {
     "type": "object",
     "additionalProperties": {
@@ -68,6 +73,7 @@ class BookListView(GenericAPIView):
     parser_classes = (MultiPartParser,)
     pagination_class = KnowledgePagination
     serializer_class = BookSerializer
+    throttle_classes = (BookUploadThrottle,)
 
     def get_permissions(self):
         if self.request.method == "GET":
@@ -95,9 +101,10 @@ class BookListView(GenericAPIView):
         summary="Загрузить книгу",
         description=(
             "Создаёт книгу из multipart-файла и добавляет её в библиотеку текущего "
-            "пользователя. Принимает optional metadata и обложку; для EPUB без "
-            "ручной обложки пытается сохранить обложку из файла. Требуется профиль "
-            "автора материалов."
+            f"пользователя. Принимает PDF или EPUB размером до {BOOK_MAX_UPLOAD_MB} "
+            "МБ и проверяет формат по содержимому. Можно передать необязательные "
+            "метаданные и обложку; для EPUB без ручной обложки используется обложка "
+            "из файла. Требуется профиль автора материалов."
         ),
         tags=[KNOWLEDGE_TAG],
         request=BookUploadSerializer,
@@ -125,7 +132,7 @@ class BookListView(GenericAPIView):
             ),
             400: OpenApiResponse(
                 response=VALIDATION_ERROR_SCHEMA,
-                description="Поля multipart-запроса не прошли валидацию.",
+                description="Файл или поля multipart-запроса не прошли проверку.",
             ),
             401: OpenApiResponse(
                 response=KnowledgeDetailResponseSerializer,
@@ -145,6 +152,10 @@ class BookListView(GenericAPIView):
             415: OpenApiResponse(
                 response=KnowledgeDetailResponseSerializer,
                 description="Запрос передан не как multipart/form-data.",
+            ),
+            429: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Превышен лимит загрузки книг.",
             ),
         },
     )
@@ -169,6 +180,8 @@ class BookListView(GenericAPIView):
                 publisher=data.get("publisher", ""),
                 cover=data.get("cover"),
             )
+        except InvalidBookFile as error:
+            raise ValidationError({"file": str(error)}) from error
         except Exception as error:
             raise APIException("Не удалось сохранить книгу.") from error
         return Response(
@@ -366,6 +379,49 @@ class BookContentView(GenericAPIView):
             _get_or_add_library_book(request.user, book)
 
         return Response({"url": url, "expires_in": expires_in})
+
+
+class BookProgressView(GenericAPIView):
+    permission_classes = (IsAuthenticated,)
+    serializer_class = BookProgressSerializer
+
+    @extend_schema(
+        operation_id="knowledge_books_progress_retrieve",
+        summary="Получить сохранённую позицию книги",
+        description=(
+            "Возвращает прогресс текущего пользователя для одной доступной книги. "
+            "Если книга ещё не добавлена в библиотеку, поля имеют значение null. "
+            "Запрос не добавляет книгу в библиотеку."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        responses={
+            200: BookProgressSerializer,
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            403: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Чужая приватная книга.",
+            ),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Книга не найдена.",
+            ),
+        },
+    )
+    def get(self, request, book_uuid):
+        book = get_object_or_404(Book, id=book_uuid)
+        if not _can_access_book(request.user, book):
+            raise PermissionDenied("Эта приватная книга вам недоступна.")
+
+        entry = UserLibraryBook.objects.filter(user=request.user, book=book).first()
+        if entry is None:
+            return Response(
+                {
+                    "reading_location": None,
+                    "reading_percentage": None,
+                    "updated_at": None,
+                }
+            )
+        return Response(BookProgressSerializer(entry).data)
 
 
 class LibraryListView(GenericAPIView):
@@ -648,8 +704,8 @@ class KnowledgeProfileAvatarView(GenericAPIView):
         operation_id="knowledge_profile_avatar_delete",
         summary="Удалить avatar профиля автора",
         description=(
-            "Удаляет avatar текущего пользователя. Повторный вызов без avatar "
-            "возвращает неизменённый профиль."
+            "Убирает avatar из профиля и ставит объект в очередь очистки storage. "
+            "Повторный вызов без avatar возвращает неизменённый профиль."
         ),
         tags=[KNOWLEDGE_TAG],
         request=None,
@@ -666,10 +722,7 @@ class KnowledgeProfileAvatarView(GenericAPIView):
         profile = get_object_or_404(KnowledgeProfile, user=request.user)
         storage = get_knowledge_storage()
         try:
-            profile = delete_knowledge_profile_avatar(
-                profile=profile,
-                storage=storage,
-            )
+            profile = delete_knowledge_profile_avatar(profile=profile)
         except Exception as error:
             raise APIException("Не удалось удалить avatar профиля.") from error
 

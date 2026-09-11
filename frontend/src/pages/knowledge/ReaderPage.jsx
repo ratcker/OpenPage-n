@@ -11,7 +11,7 @@ import { Link, useParams } from 'react-router-dom';
 import {
   getKnowledgeBook,
   getKnowledgeBookContent,
-  getKnowledgeLibrary,
+  getKnowledgeBookProgress,
   updateKnowledgeProgress,
 } from '../../api/knowledge.js';
 import useAuth from '../../auth/useAuth.js';
@@ -32,10 +32,9 @@ function readerErrorMessage(error) {
   return 'Не удалось открыть книгу.';
 }
 
-function savedPosition(book, library) {
-  const entry = library?.results?.find((item) => item.book.id === book.id);
-  const location = entry?.reading_location;
-  const percentage = Number(entry?.reading_percentage);
+function savedPosition(book, savedProgress) {
+  const location = savedProgress?.reading_location;
+  const percentage = Number(savedProgress?.reading_percentage);
 
   if (!location || location.type !== book.format) return null;
   if (book.format === 'pdf' && (!Number.isInteger(location.page) || location.page < 1)) {
@@ -92,13 +91,13 @@ export default function ReaderPage() {
     setIsRefreshing(false);
 
     try {
-      const libraryRequest = authenticated
-        ? getKnowledgeLibrary().catch(() => null)
+      const progressRequest = authenticated
+        ? getKnowledgeBookProgress(bookId).catch(() => null)
         : Promise.resolve(null);
-      const [book, content, library] = await Promise.all([
+      const [book, content, savedProgress] = await Promise.all([
         getKnowledgeBook(bookId, authenticated),
         getKnowledgeBookContent(bookId, authenticated),
-        libraryRequest,
+        progressRequest,
       ]);
 
       if (loadIdRef.current !== loadId) return;
@@ -106,7 +105,7 @@ export default function ReaderPage() {
         throw new Error('Unsupported book format.');
       }
 
-      const position = savedPosition(book, library);
+      const position = savedPosition(book, savedProgress);
       const signature = position ? JSON.stringify(position) : '';
       positionRef.current = position;
       lastSavedRef.current = signature;

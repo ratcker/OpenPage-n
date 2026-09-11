@@ -20,6 +20,7 @@ from .storage import (
     book_storage_key,
     get_knowledge_storage,
 )
+from .test_helpers import make_epub, make_pdf
 
 
 class TrackingLocalKnowledgeStorage(LocalKnowledgeStorage):
@@ -280,7 +281,7 @@ class CreateBookTests(TestCase):
     def create_book(self, storage, **changes):
         data = {
             "user": self.user,
-            "content": b"epub file content",
+            "content": make_epub(),
             "title": "Новая книга",
             "author": "Автор книги",
             "description": "Описание",
@@ -305,7 +306,7 @@ class CreateBookTests(TestCase):
             )
             self.assertTrue(storage.exists(book.storage_key))
             with storage.open(book.storage_key) as stored_file:
-                self.assertEqual(stored_file.read(), b"epub file content")
+                self.assertEqual(stored_file.read(), make_epub())
 
             library_entry = UserLibraryBook.objects.get(
                 user=self.user,
@@ -317,7 +318,7 @@ class CreateBookTests(TestCase):
     def test_creates_ready_pdf_with_original_content(self):
         with TemporaryDirectory() as root:
             storage = TrackingLocalKnowledgeStorage(root=root)
-            content = b"%PDF test content"
+            content = make_pdf()
 
             book = self.create_book(
                 storage,

@@ -69,7 +69,8 @@ vi.mock('./EpubReader.jsx', () => ({
 const bookId = '7da55fa2-b522-4c4c-95fe-18d1c8111480';
 const bookPath = `/api/knowledge/books/${bookId}/`;
 const contentPath = `/api/knowledge/books/${bookId}/content/`;
-const progressPath = `/api/knowledge/library/${bookId}/progress/`;
+const progressReadPath = `/api/knowledge/books/${bookId}/progress/`;
+const progressWritePath = `/api/knowledge/library/${bookId}/progress/`;
 
 function book(format = 'pdf') {
   return {
@@ -83,15 +84,16 @@ function book(format = 'pdf') {
   };
 }
 
-function page(results) {
-  return { count: results.length, next: null, previous: null, results };
-}
-
 function mockReaderApi({
   format = 'pdf',
   bookHandler,
   contentHandler,
-  library = [],
+  savedProgress = {
+    reading_location: null,
+    reading_percentage: null,
+    updated_at: null,
+  },
+  progressReadHandler,
   progressHandler,
 } = {}) {
   const handlers = {
@@ -100,8 +102,10 @@ function mockReaderApi({
       url: `https://s3.example.test/${format}-book`,
       expires_in: 300,
     }))),
-    '/api/knowledge/library/': () => Promise.resolve(jsonResponse(page(library))),
-    [progressPath]: progressHandler || (() => Promise.resolve(jsonResponse({ ok: true }))),
+    [progressReadPath]: progressReadHandler || (() => Promise.resolve(
+      jsonResponse(savedProgress),
+    )),
+    [progressWritePath]: progressHandler || (() => Promise.resolve(jsonResponse({ ok: true }))),
   };
   const fetchMock = vi.fn((url, options) => {
     const handler = handlers[url];
@@ -159,8 +163,8 @@ describe('ReaderPage', () => {
 
     const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
     expect(requestedPaths).toEqual(expect.arrayContaining([bookPath, contentPath]));
-    expect(requestedPaths).not.toContain('/api/knowledge/library/');
-    expect(requestedPaths).not.toContain(progressPath);
+    expect(requestedPaths).not.toContain(progressReadPath);
+    expect(requestedPaths).not.toContain(progressWritePath);
     for (const [path, options] of fetchMock.mock.calls) {
       if ([bookPath, contentPath].includes(path)) {
         expect(options.headers).toBeUndefined();
@@ -213,15 +217,26 @@ describe('ReaderPage', () => {
     expect(screen.getByRole('link', { name: 'Назад' })).toBeInTheDocument();
   });
 
-  it('восстанавливает PDF page, обновляет percentage сразу и сохраняет через 5 секунд', async () => {
+  it('начинает с первой страницы, когда сохранённого прогресса нет', async () => {
+    const fetchMock = mockReaderApi();
+
+    renderReader('authenticated');
+
+    expect(await screen.findByText('PDF page: 1')).toBeInTheDocument();
+    expect(screen.getByLabelText('Прогресс чтения')).toHaveTextContent('0%');
+    expect(fetchMock).toHaveBeenCalledWith(progressReadPath, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer reader-token' }),
+    }));
+  });
+
+  it('восстанавливает прогресс 21-й книги без запроса списка библиотеки', async () => {
     const progressHandler = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));
     const fetchMock = mockReaderApi({
-      library: [{
-        id: 1,
-        book: book('pdf'),
+      savedProgress: {
         reading_location: { type: 'pdf', page: 7 },
         reading_percentage: '36.40',
-      }],
+        updated_at: '2026-09-10T10:00:00Z',
+      },
       progressHandler,
     });
 
@@ -234,6 +249,12 @@ describe('ReaderPage', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer reader-token' }),
       }));
     }
+    expect(fetchMock).toHaveBeenCalledWith(progressReadPath, expect.objectContaining({
+      headers: expect.objectContaining({ Authorization: 'Bearer reader-token' }),
+    }));
+    expect(fetchMock.mock.calls.map(([path]) => path)).not.toContain(
+      '/api/knowledge/library/',
+    );
 
     vi.useFakeTimers();
     fireEvent.click(screen.getByRole('button', { name: 'Передвинуть PDF' }));
@@ -276,12 +297,11 @@ describe('ReaderPage', () => {
     const progressHandler = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));
     mockReaderApi({
       format: 'epub',
-      library: [{
-        id: 2,
-        book: book('epub'),
+      savedProgress: {
         reading_location: { type: 'epub', location: savedCfi },
         reading_percentage: '22.80',
-      }],
+        updated_at: '2026-09-10T10:00:00Z',
+      },
       progressHandler,
     });
     const browser = userEvent.setup();

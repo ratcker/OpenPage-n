@@ -229,3 +229,27 @@ class ArticleImage(models.Model):
 
     def __str__(self):
         return str(self.id)
+
+
+class StorageCleanupJob(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    storage_key = models.CharField(max_length=500)
+    reason = models.CharField(max_length=100)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        indexes = [
+            models.Index(
+                fields=("completed_at", "created_at"),
+                name="knowledge_cleanup_pending_idx",
+            )
+        ]
+        verbose_name = "storage cleanup job"
+        verbose_name_plural = "storage cleanup jobs"
+
+    def __str__(self):
+        return self.storage_key

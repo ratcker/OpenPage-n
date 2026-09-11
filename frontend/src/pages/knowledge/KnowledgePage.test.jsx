@@ -304,11 +304,11 @@ describe('KnowledgePage', () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       '/api/knowledge/books/',
-      expect.objectContaining({ credentials: 'include' }),
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({ Authorization: 'Bearer knowledge-token' }),
+      }),
     );
-    expect(fetchMock.mock.calls.find(([path]) => (
-      path === '/api/knowledge/books/'
-    ))[1].headers).toBeUndefined();
 
     for (const path of [
       '/api/knowledge/library/',
@@ -344,6 +344,7 @@ describe('KnowledgePage', () => {
 
     const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
     expect(requestedPaths).toEqual(['/api/knowledge/books/']);
+    expect(fetchMock.mock.calls[0][1].headers).toBeUndefined();
   });
 
   it('показывает статус книги, уже находящейся в библиотеке', async () => {
@@ -415,6 +416,85 @@ describe('KnowledgePage', () => {
     expect(screen.getByRole('status', { name: 'Загружаем публичные книги…' })).toBeInTheDocument();
     expect(screen.getByRole('status', { name: 'Загружаем вашу библиотеку…' })).toBeInTheDocument();
     expect(screen.getByText('Загружаем профиль…')).toBeInTheDocument();
+  });
+
+  it('переключает страницы каталога и библиотеки независимо', async () => {
+    const catalogSecondBook = {
+      ...publicBook,
+      id: '711965a3-d329-479e-9758-cf5b8f8d66db',
+      title: 'Двадцать первая книга каталога',
+    };
+    const librarySecondBook = {
+      ...libraryBook,
+      id: 'f24d17cd-1575-4eb4-b613-b8aa2b3a45dc',
+      title: 'Двадцать первая книга библиотеки',
+    };
+    const librarySecondItem = {
+      ...libraryItem,
+      id: 39,
+      book: librarySecondBook,
+    };
+    const fetchMock = mockKnowledgeApi({
+      '/api/knowledge/books/': () => Promise.resolve(jsonResponse({
+        count: 21,
+        next: '/api/knowledge/books/?page=2',
+        previous: null,
+        results: [publicBook],
+      })),
+      '/api/knowledge/books/?page=2': () => Promise.resolve(jsonResponse({
+        count: 21,
+        next: null,
+        previous: '/api/knowledge/books/',
+        results: [catalogSecondBook],
+      })),
+      '/api/knowledge/library/': () => Promise.resolve(jsonResponse({
+        count: 21,
+        next: '/api/knowledge/library/?page=2',
+        previous: null,
+        results: [libraryItem],
+      })),
+      '/api/knowledge/library/?page=2': () => Promise.resolve(jsonResponse({
+        count: 21,
+        next: null,
+        previous: '/api/knowledge/library/',
+        results: [librarySecondItem],
+      })),
+    });
+    const browser = userEvent.setup();
+    renderPage();
+
+    const catalogPages = await screen.findByRole('navigation', {
+      name: 'Страницы: Публичные книги',
+    });
+    const libraryPages = screen.getByRole('navigation', {
+      name: 'Страницы: Ваши книги',
+    });
+    await browser.click(within(catalogPages).getByRole('button', { name: 'Далее' }));
+
+    expect(await screen.findByRole('heading', {
+      name: catalogSecondBook.title,
+    })).toBeInTheDocument();
+    expect(within(libraryPages).getByText('Страница 1')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: libraryBook.title })).toBeInTheDocument();
+
+    await browser.click(within(libraryPages).getByRole('button', { name: 'Далее' }));
+
+    expect(await screen.findByRole('heading', {
+      name: librarySecondBook.title,
+    })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: catalogSecondBook.title })).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/knowledge/books/?page=2',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer knowledge-token' }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/knowledge/library/?page=2',
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: 'Bearer knowledge-token' }),
+      }),
+    );
   });
 
   it('показывает отдельные empty states каталога и библиотеки', async () => {

@@ -1,12 +1,14 @@
 from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin
 
+from knowledge.admin_mixins import StorageCleanupAdminMixin
+
 from .models import PendingRegistration, User
 
 
 # Пользователи в админке
 @admin.register(User)
-class CustomUserAdmin(UserAdmin):
+class CustomUserAdmin(StorageCleanupAdminMixin, UserAdmin):
     ordering = ("email",)
     list_display = (
         "email",
