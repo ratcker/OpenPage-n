@@ -119,7 +119,14 @@ describe('ArticlePage', () => {
 
     renderPage('authenticated');
 
-    expect(await screen.findByRole('img', { name: 'Схема' })).toHaveAttribute(
+    await screen.findByRole('heading', { name: privateArticle.title });
+    const privateImage = await screen.findByRole(
+      'img',
+      { name: 'Схема' },
+      { timeout: 3000 },
+    );
+
+    expect(privateImage).toHaveAttribute(
       'src',
       'blob:private-image',
     );
