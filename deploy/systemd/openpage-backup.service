@@ -1,5 +1,5 @@
 [Unit]
-Description=Backup OpenPage Pastgres database
+Description=Back up OpenPage PostgreSQL and MinIO
 Requires=docker.service
 After=docker.service
 

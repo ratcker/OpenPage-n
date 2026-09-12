@@ -1,12 +1,18 @@
 import uuid
+from datetime import date
 
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 
 
+def max_publication_year():
+    return date.today().year + 1
+
+
 # Профиль пользователя внутри Базы знаний
 class KnowledgeProfile(models.Model):
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     user = models.OneToOneField(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -17,7 +23,7 @@ class KnowledgeProfile(models.Model):
     avatar = models.CharField(
         max_length=500,
         blank=True,
-        help_text="Логический ключ будущего объекта в хранилище.",
+        help_text="Логический ключ avatar в Knowledge storage.",
     )
 
     class Meta:
@@ -38,6 +44,13 @@ class Book(models.Model):
         PUBLIC = "public", "Public"
         PRIVATE = "private", "Private"
 
+    class PublicationBasis(models.TextChoices):
+        AUTHOR = "author", "Автор произведения"
+        AUTHORIZED_DISTRIBUTOR = (
+            "authorized_distributor",
+            "Правообладатель или уполномоченный распространитель",
+        )
+
     class Status(models.TextChoices):
         PROCESSING = "processing", "Processing"
         READY = "ready", "Ready"
@@ -47,6 +60,13 @@ class Book(models.Model):
     title = models.CharField(max_length=255)
     author = models.CharField(max_length=255)
     description = models.TextField(blank=True)
+    language = models.CharField(max_length=16, blank=True)
+    year = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        validators=[MaxValueValidator(max_publication_year)],
+    )
+    publisher = models.CharField(max_length=255, blank=True)
     format = models.CharField(max_length=4, choices=Format.choices)
     uploaded_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
@@ -58,12 +78,31 @@ class Book(models.Model):
         choices=Visibility.choices,
         default=Visibility.PRIVATE,
     )
+    publication_basis = models.CharField(
+        max_length=32,
+        choices=PublicationBasis.choices,
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    rights_confirmed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        editable=False,
+    )
+    rights_statement_version = models.CharField(
+        max_length=16,
+        null=True,
+        blank=True,
+        editable=False,
+    )
     status = models.CharField(
         max_length=10,
         choices=Status.choices,
         default=Status.PROCESSING,
     )
     storage_key = models.CharField(max_length=500, unique=True)
+    cover_key = models.CharField(max_length=500, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -83,6 +122,24 @@ class Book(models.Model):
             models.CheckConstraint(
                 condition=models.Q(status__in=("processing", "ready", "failed")),
                 name="knowledge_book_status_valid",
+            ),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(
+                        publication_basis__isnull=True,
+                        rights_confirmed_at__isnull=True,
+                        rights_statement_version__isnull=True,
+                    )
+                    | models.Q(
+                        publication_basis__in=(
+                            "author",
+                            "authorized_distributor",
+                        ),
+                        rights_confirmed_at__isnull=False,
+                        rights_statement_version__isnull=False,
+                    )
+                ),
+                name="knowledge_book_rights_fields_consistent",
             ),
         ]
 
@@ -132,3 +189,110 @@ class UserLibraryBook(models.Model):
 
     def __str__(self):
         return f"{self.user.email}: {self.book.title}"
+
+
+# Markdown хранится как исходный текст и обрабатывается только на клиенте.
+class Article(models.Model):
+    class Visibility(models.TextChoices):
+        PUBLIC = "public", "Public"
+        PRIVATE = "private", "Private"
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    title = models.CharField(max_length=255)
+    body = models.TextField()
+    visibility = models.CharField(
+        max_length=7,
+        choices=Visibility.choices,
+        default=Visibility.PRIVATE,
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="knowledge_articles",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "article"
+        verbose_name_plural = "articles"
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(visibility__in=("public", "private")),
+                name="knowledge_article_visibility_valid",
+            )
+        ]
+
+    def __str__(self):
+        return self.title
+
+
+# Сессия позволяет загрузить изображения до появления самой статьи.
+class ArticleImageUploadSession(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="knowledge_article_upload_sessions",
+    )
+    article = models.ForeignKey(
+        Article,
+        null=True,
+        blank=True,
+        on_delete=models.CASCADE,
+        related_name="image_upload_sessions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("-created_at",)
+        verbose_name = "article image upload session"
+        verbose_name_plural = "article image upload sessions"
+
+    def __str__(self):
+        return str(self.id)
+
+
+class ArticleImage(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    upload_session = models.ForeignKey(
+        ArticleImageUploadSession,
+        on_delete=models.CASCADE,
+        related_name="images",
+    )
+    storage_key = models.CharField(max_length=500, unique=True)
+    content_type = models.CharField(max_length=32)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ("created_at",)
+        verbose_name = "article image"
+        verbose_name_plural = "article images"
+
+    def __str__(self):
+        return str(self.id)
+
+
+class StorageCleanupJob(models.Model):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    storage_key = models.CharField(max_length=500)
+    reason = models.CharField(max_length=100)
+    attempts = models.PositiveIntegerField(default=0)
+    last_error = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ("created_at", "id")
+        indexes = [
+            models.Index(
+                fields=("completed_at", "created_at"),
+                name="knowledge_cleanup_pending_idx",
+            )
+        ]
+        verbose_name = "storage cleanup job"
+        verbose_name_plural = "storage cleanup jobs"
+
+    def __str__(self):
+        return self.storage_key

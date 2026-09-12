@@ -13,6 +13,10 @@ import {
   mockUser as user,
 } from './test/testData.js';
 
+vi.mock('./pages/knowledge/ReaderPage.jsx', () => ({
+  default: () => <main><h1>Публичная читалка</h1></main>,
+}));
+
 // Маленький маршрутизатор fetch держит сетевые сценарии тестов короткими.
 function mockApi(handlers) {
   const fetchMock = vi.fn((url, options) => {
@@ -137,7 +141,6 @@ describe('авторизация и маршруты', () => {
   it.each([
     ['/', 'Перейти в хаб'],
     ['/hub', 'Сервисы рядом'],
-    ['/knowledge', 'База знаний'],
   ])('оставляет %s публичным', (route, accessibleName) => {
     renderApp(route, false);
 
@@ -145,35 +148,137 @@ describe('авторизация и маршруты', () => {
   });
 
   it('открывает Базу знаний из каталога, сохраняя карточку будущих сервисов', async () => {
+    const emptyPage = {
+      count: 0,
+      next: null,
+      previous: null,
+      results: [],
+    };
+    const fetchMock = mockApi({
+      '/api/auth/refresh/': () => Promise.resolve(jsonResponse(session)),
+      '/api/knowledge/books/': () => Promise.resolve(jsonResponse(emptyPage)),
+      '/api/knowledge/library/': () => Promise.resolve(jsonResponse(emptyPage)),
+      '/api/knowledge/profile/': () => Promise.resolve(jsonResponse({ detail: 'Не найдено' }, 404)),
+    });
     const browser = userEvent.setup();
-    renderApp('/hub', false);
+    renderApp('/hub');
 
     expect(screen.getByText('Готовим новые сервисы.')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledWith(
+        '/api/auth/refresh/',
+        expect.anything(),
+      );
+    });
     await browser.click(screen.getByRole('link', { name: /База знаний/ }));
 
-    expect(screen.getByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'Книги' })).toHaveAttribute('aria-selected', 'true');
   });
 
-  it('переключает разделы и локально обновляет авторский профиль', async () => {
-    const browser = userEvent.setup();
-    renderApp('/knowledge', false);
+  it('открывает анонимному читателю публичную Базу знаний', async () => {
+    const emptyPage = {
+      count: 0,
+      next: null,
+      previous: null,
+      results: [],
+    };
+    const fetchMock = mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+      '/api/knowledge/books/': () => Promise.resolve(jsonResponse(emptyPage)),
+    });
 
-    await browser.click(screen.getByRole('tab', { name: 'Статьи' }));
-    expect(screen.getByRole('heading', { name: 'Статьи' })).toBeInTheDocument();
-    expect(screen.queryByRole('heading', { name: 'Ваши книги' })).not.toBeInTheDocument();
+    renderApp('/knowledge');
 
-    await browser.click(screen.getByRole('tab', { name: 'Книги' }));
-    await browser.click(screen.getByRole('button', { name: 'Настроить профиль' }));
+    expect(await screen.findByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Публичный каталог' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', {
+      name: 'Войдите, чтобы открыть личную библиотеку.',
+    })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
 
-    const dialog = screen.getByRole('dialog', { name: 'Настройка профиля' });
-    const nameInput = screen.getByLabelText('Имя', { selector: 'input' });
-    await browser.clear(nameInput);
-    await browser.type(nameInput, 'Анна Петрова');
-    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
+    const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
+    expect(requestedPaths).toContain('/api/knowledge/books/');
+    expect(requestedPaths).not.toContain('/api/knowledge/library/');
+    expect(requestedPaths).not.toContain('/api/knowledge/profile/');
+  });
 
-    expect(dialog).not.toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'Анна Петрова' })).toBeInTheDocument();
+  it('оставляет reader route доступным анонимному пользователю', async () => {
+    mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+    });
+
+    renderApp('/knowledge/books/7da55fa2-b522-4c4c-95fe-18d1c8111480/read');
+
+    expect(await screen.findByRole('heading', { name: 'Публичная читалка' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
+  });
+
+  it('оставляет public article route доступным анонимному пользователю', async () => {
+    const articleId = 'eb56e24a-6c4c-4dbf-903c-768df56e1ed4';
+    mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+      [`/api/knowledge/articles/${articleId}/`]: () => Promise.resolve(jsonResponse({
+        id: articleId,
+        title: 'Публичная статья',
+        body: '# Содержимое',
+        visibility: 'public',
+        author: null,
+        can_edit: false,
+        created_at: '2026-09-08T12:00:00Z',
+        updated_at: '2026-09-08T12:00:00Z',
+      })),
+    });
+
+    renderApp(`/knowledge/articles/${articleId}`);
+
+    expect(await screen.findByRole('heading', { name: 'Публичная статья' }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Содержимое' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
+  });
+
+  it('защищает route нового article editor авторизацией', async () => {
+    mockApi({ '/api/auth/refresh/': anonymousRefresh });
+
+    renderApp('/knowledge/articles/new');
+
+    expect(await screen.findByRole('heading', { name: 'Войти' })).toBeInTheDocument();
+  });
+
+  it('оставляет public author route доступным анонимному пользователю', async () => {
+    const publicId = '9a7c27e5-c9d4-428f-bc28-7ebaf83088cf';
+    const fetchMock = mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+      [`/api/knowledge/authors/${publicId}/`]: () => Promise.resolve(jsonResponse({
+        id: publicId,
+        display_name: 'Публичный автор',
+        bio: '',
+        avatar_url: null,
+      })),
+      [`/api/knowledge/authors/${publicId}/books/`]: () => Promise.resolve(jsonResponse({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
+      })),
+      [`/api/knowledge/authors/${publicId}/articles/`]: () => Promise.resolve(jsonResponse({
+        count: 0,
+        next: null,
+        previous: null,
+        results: [],
+      })),
+    });
+
+    renderApp(`/knowledge/authors/${publicId}`);
+
+    expect(await screen.findByRole('heading', { name: 'Публичный автор' }))
+      .toBeInTheDocument();
+    expect(screen.getByRole('heading', {
+      name: 'У автора пока нет публичных книг.',
+    })).toBeInTheDocument();
+    const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
+    expect(requestedPaths).not.toContain('/api/knowledge/profile/');
   });
 
   it('автоматически входит после подтверждения email', async () => {

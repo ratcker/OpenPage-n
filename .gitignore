@@ -4,9 +4,11 @@ venv/
 env/
 .env.prod
 
+todo.ratcker
 
 frontend/dist/
 frontend/.vite/
+frontend/.vite-temp/
 
 __pycache__/
 *.py[cod]
@@ -20,6 +22,10 @@ htmlcov/
 
 backend/db.sqlite3
 backend/*.log
+backend/media/
+backend/staticfiles/
+frontend/coverage/
+/notes/*
 
 .env
 *.local

@@ -88,6 +88,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Test systemd reconciliation
+        run: bash deploy/scripts/tests/test-reconcile-systemd.sh
+
       - name: Validate monitoring Compose
         run: docker compose -f deploy/monitoring/compose.yml config --quiet
         env:

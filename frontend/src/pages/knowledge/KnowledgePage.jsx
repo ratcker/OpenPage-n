@@ -1,77 +1,604 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 
+import {
+  addBookToLibrary,
+  getKnowledgeArticles,
+  getKnowledgeBooks,
+  getKnowledgeLibrary,
+  getKnowledgeProfile,
+  getMyKnowledgeArticles,
+} from '../../api/knowledge.js';
+import useAuth from '../../auth/useAuth.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
 import AuthorProfile from './AuthorProfile.jsx';
+import AuthorProfileDialog from './AuthorProfileDialog.jsx';
+import ArticleCard from './ArticleCard.jsx';
+import BookCard from './BookCard.jsx';
+import BookEditDialog from './BookEditDialog.jsx';
+import BookUploadDialog from './BookUploadDialog.jsx';
 
-const bookCards = ['Новая полка', 'Будущая коллекция', 'Личные заметки'];
-const articleCards = ['Рабочие заметки', 'Полезная подборка', 'Новая идея'];
+const initialCollectionState = {
+  status: 'loading',
+  items: [],
+  count: 0,
+  next: null,
+  previous: null,
+};
 
-function BooksView() {
+const initialArticlesState = {
+  status: 'loading',
+  items: [],
+  count: 0,
+  next: null,
+  previous: null,
+};
+
+function loadedCollection(data) {
+  return {
+    status: 'success',
+    items: data.results,
+    count: data.count,
+    next: data.next,
+    previous: data.previous,
+  };
+}
+
+function CatalogBookAction({
+  book,
+  authStatus,
+  libraryState,
+  libraryBookIds,
+  addingBookId,
+  error,
+  onAdd,
+}) {
+  if (authStatus === 'anonymous') {
+    return (
+      <Link className="book-library-action book-library-login" to="/login" state={{ from: '/knowledge' }}>
+        Войти, чтобы добавить
+      </Link>
+    );
+  }
+
+  const isInLibrary = libraryBookIds.has(book.id);
+  const isAdding = addingBookId === book.id;
+  const isCheckingLibrary = libraryState.status === 'loading';
+
   return (
-    <div className="knowledge-library-layout">
-      <AuthorProfile />
-
-      <section className="knowledge-catalog" aria-labelledby="books-title">
-        <div className="knowledge-section-heading">
-          <div>
-            <p className="section-kicker">Библиотека</p>
-            <h2 id="books-title">Ваши книги</h2>
-          </div>
-          <p>Основа будущего книжного каталога.</p>
-        </div>
-
-        <div className="book-grid">
-          {bookCards.map((title, index) => (
-            <article className="book-card" key={title}>
-              <div className="book-cover" aria-hidden="true">
-                <span>{String(index + 1).padStart(2, '0')}</span>
-                <i />
-              </div>
-              <div>
-                <p>Макет карточки</p>
-                <h3>{title}</h3>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
+    <div className="book-library-control">
+      <button
+        className="book-library-action"
+        type="button"
+        disabled={isInLibrary || isCheckingLibrary || Boolean(addingBookId)}
+        onClick={() => onAdd(book.id)}
+      >
+        {isInLibrary && 'В библиотеке'}
+        {isAdding && 'Добавляем…'}
+        {!isInLibrary && !isAdding && 'Добавить в библиотеку'}
+      </button>
+      {error?.bookId === book.id && (
+        <p className="book-library-error" role="alert">{error.message}</p>
+      )}
     </div>
   );
 }
 
-function ArticlesView() {
+function LoadingBooks({ label }) {
   return (
-    <section className="knowledge-catalog articles-catalog" aria-labelledby="articles-title">
+    <div className="book-grid book-grid-loading" role="status" aria-label={label}>
+      {[1, 2, 3].map((item) => (
+        <div className="book-card book-card-loading" key={item} aria-hidden="true">
+          <div className="book-cover" />
+          <div>
+            <span />
+            <i />
+          </div>
+        </div>
+      ))}
+      <span className="visually-hidden">{label}</span>
+    </div>
+  );
+}
+
+function BookCollection({
+  id,
+  kicker,
+  title,
+  description,
+  state,
+  emptyTitle,
+  emptyDescription,
+  errorTitle,
+  loadingLabel,
+  page,
+  library = false,
+  renderBookAction,
+  onEditBook,
+  onPageChange,
+}) {
+  let content;
+
+  if (state.status === 'loading') {
+    content = <LoadingBooks label={loadingLabel} />;
+  } else if (state.status === 'anonymous') {
+    content = (
+      <div className="knowledge-message">
+        <h3>Войдите, чтобы открыть личную библиотеку.</h3>
+        <p>После входа здесь будут сохранённые книги и прогресс чтения.</p>
+        <Link className="knowledge-login-link" to="/login" state={{ from: '/knowledge' }}>
+          Войти
+        </Link>
+      </div>
+    );
+  } else if (state.status === 'error') {
+    content = (
+      <div className="knowledge-message" role="alert">
+        <h3>{errorTitle}</h3>
+        <p>Попробуйте открыть раздел немного позже.</p>
+      </div>
+    );
+  } else if (state.items.length === 0) {
+    content = (
+      <div className="knowledge-message">
+        <h3>{emptyTitle}</h3>
+        <p>{emptyDescription}</p>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="book-grid">
+        {state.items.map((item) => {
+          const book = library ? item.book : item;
+          return (
+            <BookCard
+              action={renderBookAction?.(book)}
+              book={book}
+              key={library ? item.id : book.id}
+              onEdit={onEditBook}
+              readingPercentage={library ? item.reading_percentage : undefined}
+            />
+          );
+        })}
+      </div>
+    );
+  }
+
+  return (
+    <section className="knowledge-catalog" aria-labelledby={id}>
       <div className="knowledge-section-heading">
         <div>
-          <p className="section-kicker">Публикации</p>
-          <h2 id="articles-title">Статьи</h2>
+          <p className="section-kicker">{kicker}</p>
+          <h2 id={id}>{title}</h2>
         </div>
-        <p>Место для будущих текстов и подборок.</p>
+        <p>{description}</p>
       </div>
-
-      <div className="article-grid">
-        {articleCards.map((title, index) => (
-          <article className="article-card" key={title}>
-            <div className="article-card-mark" aria-hidden="true">0{index + 1}</div>
-            <div>
-              <p>Будущая статья</p>
-              <h3>{title}</h3>
-              <span>Здесь появятся описание и метаданные материала.</span>
-            </div>
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path d="m7 4 6 6-6 6" />
-            </svg>
-          </article>
-        ))}
-      </div>
+      {content}
+      {state.status === 'success' && (state.next || state.previous) && (
+        <nav className="knowledge-pagination" aria-label={`Страницы: ${title}`}>
+          <button
+            type="button"
+            disabled={!state.previous}
+            onClick={() => onPageChange(page - 1)}
+          >
+            Назад
+          </button>
+          <span>Страница {page}</span>
+          <button
+            type="button"
+            disabled={!state.next}
+            onClick={() => onPageChange(page + 1)}
+          >
+            Далее
+          </button>
+        </nav>
+      )}
     </section>
   );
 }
 
-// Визуальная основа сервиса без серверных данных.
+function BooksView({
+  authStatus,
+  booksState,
+  booksPage,
+  libraryState,
+  libraryPage,
+  profileState,
+  libraryBookIds,
+  addingBookId,
+  addError,
+  onAddBook,
+  onBooksPageChange,
+  onEditBook,
+  onLibraryPageChange,
+  onCreateProfile,
+  onEditProfile,
+  onOpenUpload,
+}) {
+  return (
+    <div className="knowledge-library-layout">
+      <AuthorProfile
+        state={profileState}
+        onCreate={onCreateProfile}
+        onEdit={onEditProfile}
+        onUpload={onOpenUpload}
+      />
+
+      <div className="knowledge-books-column">
+        <BookCollection
+          id="library-title"
+          kicker="Библиотека"
+          title="Ваши книги"
+          description="Сохранённые материалы и прогресс чтения."
+          state={libraryState}
+          page={libraryPage}
+          emptyTitle="В вашей библиотеке пока нет книг."
+          emptyDescription="Здесь появятся книги из вашей личной коллекции."
+          errorTitle="Не удалось загрузить библиотеку."
+          loadingLabel="Загружаем вашу библиотеку…"
+          library
+          onEditBook={onEditBook}
+          onPageChange={onLibraryPageChange}
+        />
+
+        <BookCollection
+          id="catalog-title"
+          kicker="Общий каталог"
+          title="Публичные книги"
+          description="Новые доступные всем материалы."
+          state={booksState}
+          page={booksPage}
+          emptyTitle="Публичных книг пока нет."
+          emptyDescription="Каталог наполнится, когда появятся общедоступные книги."
+          errorTitle="Не удалось загрузить каталог."
+          loadingLabel="Загружаем публичные книги…"
+          onEditBook={onEditBook}
+          onPageChange={onBooksPageChange}
+          renderBookAction={(book) => (
+            <CatalogBookAction
+              book={book}
+              authStatus={authStatus}
+              libraryState={libraryState}
+              libraryBookIds={libraryBookIds}
+              addingBookId={addingBookId}
+              error={addError}
+              onAdd={onAddBook}
+            />
+          )}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ArticleCollection({
+  className = '',
+  id,
+  kicker,
+  title,
+  description,
+  action,
+  state,
+  page,
+  emptyTitle,
+  emptyDescription,
+  errorTitle,
+  onPageChange,
+}) {
+  let content;
+
+  if (state.status === 'loading') {
+    content = (
+      <div className="knowledge-message" role="status">
+        <h3>Загружаем статьи…</h3>
+      </div>
+    );
+  } else if (state.status === 'error') {
+    content = (
+      <div className="knowledge-message" role="alert">
+        <h3>{errorTitle}</h3>
+        <p>Попробуйте открыть раздел немного позже.</p>
+      </div>
+    );
+  } else if (state.items.length === 0) {
+    content = (
+      <div className="knowledge-message">
+        <h3>{emptyTitle}</h3>
+        <p>{emptyDescription}</p>
+      </div>
+    );
+  } else {
+    content = (
+      <div className="article-grid">
+        {state.items.map((article) => (
+          <ArticleCard article={article} key={article.id} />
+        ))}
+      </div>
+    );
+  }
+
+  return (
+    <section
+      className={`knowledge-catalog articles-catalog ${className}`.trim()}
+      aria-labelledby={id}
+    >
+      <div className="knowledge-section-heading">
+        <div>
+          <p className="section-kicker">{kicker}</p>
+          <h2 id={id}>{title}</h2>
+        </div>
+        {action || <p>{description}</p>}
+      </div>
+      {content}
+      {state.status === 'success' && (state.next || state.previous) && (
+        <nav className="knowledge-pagination" aria-label={`Страницы: ${title}`}>
+          <button
+            type="button"
+            disabled={!state.previous}
+            onClick={() => onPageChange(page - 1)}
+          >
+            Назад
+          </button>
+          <span>Страница {page}</span>
+          <button
+            type="button"
+            disabled={!state.next}
+            onClick={() => onPageChange(page + 1)}
+          >
+            Далее
+          </button>
+        </nav>
+      )}
+    </section>
+  );
+}
+
+function ArticlesView({ profileState }) {
+  const [articlesState, setArticlesState] = useState(initialArticlesState);
+  const [myArticlesState, setMyArticlesState] = useState(initialArticlesState);
+  const [page, setPage] = useState(1);
+  const [myPage, setMyPage] = useState(1);
+  const hasProfile = profileState.status === 'exists';
+
+  useEffect(() => {
+    let isActive = true;
+    setArticlesState(initialArticlesState);
+
+    getKnowledgeArticles(page)
+      .then((data) => {
+        if (!isActive) return;
+        setArticlesState({
+          status: 'success',
+          items: data.results,
+          count: data.count,
+          next: data.next,
+          previous: data.previous,
+        });
+      })
+      .catch(() => {
+        if (isActive) setArticlesState({ ...initialArticlesState, status: 'error' });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [page]);
+
+  useEffect(() => {
+    if (!hasProfile) return undefined;
+
+    let isActive = true;
+    setMyArticlesState(initialArticlesState);
+
+    getMyKnowledgeArticles(myPage)
+      .then((data) => {
+        if (!isActive) return;
+        setMyArticlesState({
+          status: 'success',
+          items: data.results,
+          count: data.count,
+          next: data.next,
+          previous: data.previous,
+        });
+      })
+      .catch(() => {
+        if (isActive) setMyArticlesState({ ...initialArticlesState, status: 'error' });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [hasProfile, myPage]);
+
+  return (
+    <div className={`articles-layout${hasProfile ? ' articles-layout-with-personal' : ''}`}>
+      {hasProfile && (
+        <ArticleCollection
+          className="my-articles"
+          id="my-articles-title"
+          kicker="Личные публикации"
+          title="Ваши статьи"
+          action={(
+            <Link className="article-create-link" to="/knowledge/articles/new">
+              Написать статью
+            </Link>
+          )}
+          state={myArticlesState}
+          page={myPage}
+          emptyTitle="У вас пока нет статей."
+          emptyDescription="Создайте первый материал — приватный или публичный."
+          errorTitle="Не удалось загрузить ваши статьи."
+          onPageChange={setMyPage}
+        />
+      )}
+
+      <ArticleCollection
+        id="articles-title"
+        kicker="Публикации"
+        title="Все статьи"
+        description="Тексты и подборки авторов сообщества."
+        state={articlesState}
+        page={page}
+        emptyTitle="Публичных статей пока нет."
+        emptyDescription="Здесь появятся новые тексты авторов Базы знаний."
+        errorTitle="Не удалось загрузить статьи."
+        onPageChange={setPage}
+      />
+    </div>
+  );
+}
+
 export default function KnowledgePage() {
-  const [mode, setMode] = useState('books');
+  const { status: authStatus } = useAuth();
+  const [searchParams] = useSearchParams();
+  const [mode, setMode] = useState(
+    searchParams.get('tab') === 'articles' ? 'articles' : 'books',
+  );
+  const [booksState, setBooksState] = useState(initialCollectionState);
+  const [libraryState, setLibraryState] = useState(initialCollectionState);
+  const [booksPage, setBooksPage] = useState(1);
+  const [libraryPage, setLibraryPage] = useState(1);
+  const [profileState, setProfileState] = useState({ status: 'loading', profile: null });
+  const [addingBookId, setAddingBookId] = useState(null);
+  const [addError, setAddError] = useState(null);
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
+  const [editingBook, setEditingBook] = useState(null);
+  const [profileDialogMode, setProfileDialogMode] = useState(null);
+
+  const libraryBookIds = new Set(
+    libraryState.items.map((item) => item.book.id),
+  );
+
+  useEffect(() => {
+    if (authStatus === 'loading') return undefined;
+
+    let isActive = true;
+    setBooksState(initialCollectionState);
+
+    getKnowledgeBooks(booksPage, authStatus === 'authenticated')
+      .then((data) => {
+        if (isActive) setBooksState(loadedCollection(data));
+      })
+      .catch(() => {
+        if (isActive) setBooksState({ ...initialCollectionState, status: 'error' });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [authStatus, booksPage]);
+
+  useEffect(() => {
+    if (authStatus === 'loading') return undefined;
+
+    if (authStatus === 'anonymous') {
+      setLibraryState({ ...initialCollectionState, status: 'anonymous' });
+      return undefined;
+    }
+
+    let isActive = true;
+    setLibraryState(initialCollectionState);
+
+    getKnowledgeLibrary(libraryPage)
+      .then((data) => {
+        if (isActive) setLibraryState(loadedCollection(data));
+      })
+      .catch(() => {
+        if (isActive) setLibraryState({ ...initialCollectionState, status: 'error' });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [authStatus, libraryPage]);
+
+  useEffect(() => {
+    if (authStatus === 'loading') return undefined;
+    if (authStatus === 'anonymous') {
+      setProfileState({ status: 'anonymous', profile: null });
+      return undefined;
+    }
+
+    let isActive = true;
+    setProfileState({ status: 'loading', profile: null });
+
+    getKnowledgeProfile()
+      .then((profile) => {
+        if (isActive) setProfileState({ status: 'exists', profile });
+      })
+      .catch((error) => {
+        if (!isActive) return;
+        setProfileState({
+          status: error.status === 404 ? 'missing' : 'error',
+          profile: null,
+        });
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [authStatus]);
+
+  async function handleAddBook(bookId) {
+    if (addingBookId) return;
+
+    setAddingBookId(bookId);
+    setAddError(null);
+
+    try {
+      const entry = await addBookToLibrary(bookId);
+      setLibraryState((current) => {
+        const alreadyAdded = current.items.some((item) => item.book.id === bookId);
+        return {
+          ...current,
+          status: 'success',
+          count: alreadyAdded ? current.count : current.count + 1,
+          items: alreadyAdded ? current.items : [entry, ...current.items].slice(0, 20),
+        };
+      });
+    } catch {
+      setAddError({
+        bookId,
+        message: 'Не удалось добавить книгу. Попробуйте ещё раз.',
+      });
+    } finally {
+      setAddingBookId(null);
+    }
+  }
+
+  async function handleBookUploaded(book) {
+    const updates = [
+      getKnowledgeLibrary(libraryPage)
+        .then((data) => setLibraryState(loadedCollection(data)))
+        .catch(() => setLibraryState({ ...initialCollectionState, status: 'error' })),
+    ];
+
+    if (book.visibility === 'public') {
+      updates.push(
+        getKnowledgeBooks(booksPage, true)
+          .then((data) => setBooksState(loadedCollection(data)))
+          .catch(() => setBooksState({ ...initialCollectionState, status: 'error' })),
+      );
+    }
+
+    await Promise.all(updates);
+  }
+
+  async function handleBookUpdated() {
+    await Promise.all([
+      getKnowledgeLibrary(libraryPage)
+        .then((data) => setLibraryState(loadedCollection(data)))
+        .catch(() => setLibraryState({ ...initialCollectionState, status: 'error' })),
+      getKnowledgeBooks(booksPage, true)
+        .then((data) => setBooksState(loadedCollection(data)))
+        .catch(() => setBooksState({ ...initialCollectionState, status: 'error' })),
+    ]);
+  }
+
+  function handleProfileSaved(profile) {
+    setProfileState({ status: 'exists', profile });
+    setProfileDialogMode(null);
+  }
 
   return (
     <SiteLayout>
@@ -106,9 +633,53 @@ export default function KnowledgePage() {
         </header>
 
         <div className="container knowledge-content">
-          {mode === 'books' ? <BooksView /> : <ArticlesView />}
+          {mode === 'books' ? (
+            <BooksView
+              authStatus={authStatus}
+              booksState={booksState}
+              booksPage={booksPage}
+              libraryState={libraryState}
+              libraryPage={libraryPage}
+              profileState={profileState}
+              libraryBookIds={libraryBookIds}
+              addingBookId={addingBookId}
+              addError={addError}
+              onAddBook={handleAddBook}
+              onBooksPageChange={setBooksPage}
+              onEditBook={setEditingBook}
+              onLibraryPageChange={setLibraryPage}
+              onCreateProfile={() => setProfileDialogMode('create')}
+              onEditProfile={() => setProfileDialogMode('edit')}
+              onOpenUpload={() => setIsUploadOpen(true)}
+            />
+          ) : (
+            <ArticlesView profileState={profileState} />
+          )}
         </div>
       </div>
+
+      {isUploadOpen && profileState.status === 'exists' && (
+        <BookUploadDialog
+          onClose={() => setIsUploadOpen(false)}
+          onUploaded={handleBookUploaded}
+        />
+      )}
+      {profileDialogMode && (
+        <AuthorProfileDialog
+          mode={profileDialogMode}
+          profile={profileState.profile}
+          onClose={() => setProfileDialogMode(null)}
+          onChanged={(profile) => setProfileState({ status: 'exists', profile })}
+          onSaved={handleProfileSaved}
+        />
+      )}
+      {editingBook && (
+        <BookEditDialog
+          book={editingBook}
+          onClose={() => setEditingBook(null)}
+          onUpdated={handleBookUpdated}
+        />
+      )}
     </SiteLayout>
   );
 }

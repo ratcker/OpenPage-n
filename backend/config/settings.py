@@ -103,6 +103,35 @@ STATIC_ROOT = BASE_DIR / "staticfiles"
 # Локальное хранилище файлов приложений
 MEDIA_ROOT = BASE_DIR / "media"
 
+# S3-compatible storage используется при заданном внутреннем endpoint.
+S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", "")
+S3_PUBLIC_ENDPOINT_URL = os.environ.get("S3_PUBLIC_ENDPOINT_URL", S3_ENDPOINT_URL)
+S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME", "")
+S3_ACCESS_KEY_ID = os.environ.get("S3_ACCESS_KEY_ID", "")
+S3_SECRET_ACCESS_KEY = os.environ.get("S3_SECRET_ACCESS_KEY", "")
+S3_REGION_NAME = os.environ.get("S3_REGION_NAME", "us-east-1")
+KNOWLEDGE_CONTENT_URL_TTL_SECONDS = int(
+    os.environ.get("KNOWLEDGE_CONTENT_URL_TTL_SECONDS", "300")
+)
+KNOWLEDGE_ARTICLE_UPLOAD_TTL_SECONDS = int(
+    os.environ.get("KNOWLEDGE_ARTICLE_UPLOAD_TTL_SECONDS", "86400")
+)
+KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES = int(
+    os.environ.get("KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES", str(75 * 1024 * 1024))
+)
+if KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES <= 0:
+    raise ImproperlyConfigured("KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES must be positive.")
+
+# Счётчики запросов хранятся в PostgreSQL и общие для всех воркеров Gunicorn.
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "openpage_cache",
+        "KEY_PREFIX": "openpage",
+        "OPTIONS": {"MAX_ENTRIES": 100_000},
+    }
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 AUTH_USER_MODEL = "accounts.User"
@@ -146,6 +175,27 @@ REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
+    "DEFAULT_THROTTLE_RATES": {
+        "auth_login_ip": os.environ.get("DRF_THROTTLE_AUTH_LOGIN_IP_RATE", "30/hour"),
+        "auth_login_email": os.environ.get(
+            "DRF_THROTTLE_AUTH_LOGIN_EMAIL_RATE", "10/hour"
+        ),
+        "auth_register_ip": os.environ.get(
+            "DRF_THROTTLE_AUTH_REGISTER_IP_RATE", "10/hour"
+        ),
+        "auth_register_email": os.environ.get(
+            "DRF_THROTTLE_AUTH_REGISTER_EMAIL_RATE", "3/hour"
+        ),
+        "auth_email_ip": os.environ.get("DRF_THROTTLE_AUTH_EMAIL_IP_RATE", "30/hour"),
+        "auth_email": os.environ.get("DRF_THROTTLE_AUTH_EMAIL_RATE", "10/hour"),
+        "knowledge_book_upload": os.environ.get(
+            "DRF_THROTTLE_KNOWLEDGE_BOOK_UPLOAD_RATE", "10/hour"
+        ),
+        "knowledge_article_image_upload": os.environ.get(
+            "DRF_THROTTLE_KNOWLEDGE_ARTICLE_IMAGE_UPLOAD_RATE", "60/hour"
+        ),
+    },
+    "NUM_PROXIES": int(os.environ.get("DRF_NUM_PROXIES", "1")),
 }
 
 SPECTACULAR_SETTINGS = {
@@ -157,6 +207,7 @@ SPECTACULAR_SETTINGS = {
     ),
     "VERSION": "0.1.0",
     "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
     "TAGS": [
         {
             "name": "Авторизация",
@@ -165,6 +216,10 @@ SPECTACULAR_SETTINGS = {
         {
             "name": "Состояние",
             "description": "Простая проверка доступности процесса API.",
+        },
+        {
+            "name": "База знаний",
+            "description": "Загрузка книг, каталог, библиотека и профиль автора.",
         },
     ],
     "SWAGGER_UI_SETTINGS": {

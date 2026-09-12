@@ -1,0 +1,11 @@
+[Unit]
+Description=Clean up abandoned OpenPage article uploads hourly
+
+[Timer]
+OnCalendar=hourly
+RandomizedDelaySec=10m
+Persistent=true
+Unit=openpage-article-upload-cleanup.service
+
+[Install]
+WantedBy=timers.target

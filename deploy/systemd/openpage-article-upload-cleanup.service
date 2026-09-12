@@ -1,0 +1,10 @@
+[Unit]
+Description=Clean up abandoned OpenPage article uploads
+Requires=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+User=ratcker
+WorkingDirectory=/opt/openpage
+ExecStart=/usr/bin/docker compose --env-file /opt/openpage/deploy/.env.prod -f /opt/openpage/deploy/compose.yml exec -T backend python manage.py cleanup_article_uploads

@@ -48,6 +48,30 @@ monitoring_compose=(
     -f "$deploy_dir/monitoring/compose.yml"
 )
 
+# В production проверяем systemd и запускаем внешний smoke test. Локальный
+# режим сохраняет Compose-reconciliation, но пропускает host-level операции.
+prod_mode="${PROD:-true}"
+if [[ "$prod_mode" != true && "$prod_mode" != false ]]; then
+    echo "PROD must be true or false." >&2
+    exit 2
+fi
+
+systemd_reconcile_needed=false
+if [[ "$prod_mode" == true ]]; then
+    if "$deploy_dir/scripts/reconcile-systemd.sh" --check; then
+        :
+    else
+        systemd_check_status=$?
+        if [[ "$systemd_check_status" -ne 1 ]]; then
+            echo "Unable to inspect OpenPage systemd state." >&2
+            exit "$systemd_check_status"
+        fi
+        systemd_reconcile_needed=true
+    fi
+else
+    echo "Local mode: skipping systemd reconciliation."
+fi
+
 # Запоминаем image ID запущенных контейнеров до обновления.
 backend_container="$("${compose[@]}" ps -q backend)"
 frontend_container="$("${compose[@]}" ps -q frontend)"
@@ -65,7 +89,7 @@ if [[ -n "$frontend_container" ]]; then
 fi
 
 # Загружаем актуальные образы и получаем их новые image ID.
-"${compose[@]}" pull backend frontend gateway
+"${compose[@]}" pull backend frontend gateway minio minio-init
 backend_after="$(docker image inspect \
     ghcr.io/ratcker/openpage-backend:main \
     --format '{{.Id}}')"
@@ -144,6 +168,10 @@ fi
 "${monitoring_compose[@]}" exec -T prometheus \
     wget -q -O /dev/null --post-data='' http://alertmanager:9093/-/reload
 
+# Постоянные зависимости должны быть готовы даже при отсутствии новых image.
+"${compose[@]}" up -d --wait --wait-timeout 120 postgres minio
+"${compose[@]}" up --force-recreate --no-deps minio-init
+
 # Завершаемся раньше, если обновлять нечего.
 if [[ "$backend_changed" == false &&
       "$frontend_changed" == false &&
@@ -151,14 +179,14 @@ if [[ "$backend_changed" == false &&
       "$static_missing" == false &&
       "$config_changed" == false &&
       "$caddy_changed" == false &&
-      "$caddy_mount_stale" == false ]]; then
+      "$caddy_mount_stale" == false &&
+      "$systemd_reconcile_needed" == false ]]; then
     reload_caddy
     echo "Production is already up to date."
     exit 0
 fi
 
-# Поднимаем БД и применяем миграции новым backend image.
-"${compose[@]}" up -d --wait --wait-timeout 120 postgres
+# Применяем миграции новым backend image.
 if [[ "$backend_changed" == true ]]; then
     echo "applying backend migrations"
     "${compose[@]}" run --rm --no-deps backend \
@@ -179,7 +207,8 @@ if [[ "$caddy_changed" == true || "$caddy_mount_stale" == true ]]; then
 fi
 
 # Синхронизируем все сервисы с актуальными image и конфигурацией.
-"${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120
+"${compose[@]}" up -d --remove-orphans --wait --wait-timeout 120 \
+    postgres minio backend frontend gateway
 
 if [[ "$caddy_changed" == true || "$caddy_mount_stale" == true ]]; then
     echo "recreating gateway to refresh the Caddyfile bind mount"
@@ -188,7 +217,12 @@ if [[ "$caddy_changed" == true || "$caddy_mount_stale" == true ]]; then
 fi
 
 reload_caddy
-"$deploy_dir/scripts/smoke-test.sh"
+if [[ "$prod_mode" == true ]]; then
+    "$deploy_dir/scripts/smoke-test.sh"
+    "$deploy_dir/scripts/reconcile-systemd.sh" --apply
+else
+    echo "Local mode: skipping production smoke test."
+fi
 
 echo "Production reconciliation completed."
 "${compose[@]}" ps

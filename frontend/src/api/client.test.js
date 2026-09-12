@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  authorizedBlobRequest,
   authorizedRequest,
   clearSession,
   saveSession,
@@ -118,5 +119,24 @@ describe('authorizedRequest', () => {
     expect(fetchMock.mock.calls.at(-1)[1].headers).not.toHaveProperty('Authorization');
 
     unsubscribe();
+  });
+
+  it('получает защищённый файл с тем же access-токеном', async () => {
+    const fetchMock = vi.fn().mockResolvedValue(new Response('private-image', {
+      headers: { 'Content-Type': 'image/png' },
+    }));
+    vi.stubGlobal('fetch', fetchMock);
+    saveSession({ access: 'access-token', user });
+
+    const result = await authorizedBlobRequest('/api/knowledge/article-images/image-id/');
+
+    expect(await result.text()).toBe('private-image');
+    expect(fetchMock).toHaveBeenCalledWith(
+      '/api/knowledge/article-images/image-id/',
+      expect.objectContaining({
+        credentials: 'include',
+        headers: expect.objectContaining({ Authorization: 'Bearer access-token' }),
+      }),
+    );
   });
 });
