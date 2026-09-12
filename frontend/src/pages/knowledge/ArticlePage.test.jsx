@@ -106,9 +106,13 @@ describe('ArticlePage', () => {
         return Promise.resolve(jsonResponse(privateArticle));
       }
       if (url === imagePath) {
-        return Promise.resolve(new Response(
-          new Blob(['private-image'], { type: 'image/png' }),
-        ));
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          blob: () => Promise.resolve(
+            new Blob(['private-image'], { type: 'image/png' }),
+          ),
+        });
       }
       throw new Error(`Неожиданный запрос: ${url}`);
     });
