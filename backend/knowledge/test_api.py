@@ -413,7 +413,9 @@ class BookDeleteAPITests(KnowledgeAPITestCase):
         self.assertEqual(response.content, b"")
         self.assertFalse(Book.objects.filter(id=book.id).exists())
         self.assertFalse(
-            UserLibraryBook.objects.filter(id__in=(own_entry.id, other_entry.id)).exists()
+            UserLibraryBook.objects.filter(
+                id__in=(own_entry.id, other_entry.id)
+            ).exists()
         )
         self.assertTrue(Book.objects.filter(id=untouched.id).exists())
         self.assertTrue(UserLibraryBook.objects.filter(id=untouched_entry.id).exists())
