@@ -10,7 +10,9 @@ import useAuth from './auth/useAuth.js';
 import HubPage from './pages/hub/HubPage.jsx';
 import ArticleEditorPage from './pages/knowledge/ArticleEditorPage.jsx';
 import ArticlePage from './pages/knowledge/ArticlePage.jsx';
+import BookPage from './pages/knowledge/BookPage.jsx';
 import KnowledgePage from './pages/knowledge/KnowledgePage.jsx';
+import LibraryPage from './pages/knowledge/LibraryPage.jsx';
 import PublicAuthorPage from './pages/knowledge/PublicAuthorPage.jsx';
 import ReaderPage from './pages/knowledge/ReaderPage.jsx';
 import LandingPage from './pages/LandingPage.jsx';
@@ -55,6 +57,15 @@ export default function App() {
         )}
       />
       <Route path="/knowledge/books/:id/read" element={<ReaderPage />} />
+      <Route path="/knowledge/books/:id" element={<BookPage />} />
+      <Route
+        path="/knowledge/library"
+        element={(
+          <ProtectedRoute>
+            <LibraryPage />
+          </ProtectedRoute>
+        )}
+      />
       <Route
         path="/profile"
         element={(

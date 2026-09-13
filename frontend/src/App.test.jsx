@@ -75,6 +75,8 @@ describe('авторизация и маршруты', () => {
     expect(await screen.findByRole('heading', { name: 'Профиль' })).toBeInTheDocument();
     expect(screen.getByText(user.name)).toBeInTheDocument();
     expect(screen.getByText(user.email)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Моя библиотека' }))
+      .toHaveAttribute('href', '/knowledge/library');
     expect(loginHandler).toHaveBeenCalledWith(expect.objectContaining({
       method: 'POST',
       credentials: 'include',
@@ -192,9 +194,6 @@ describe('авторизация и маршруты', () => {
 
     expect(await screen.findByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Публичный каталог' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', {
-      name: 'Войдите, чтобы открыть личную библиотеку.',
-    })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
 
     const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
@@ -244,6 +243,26 @@ describe('авторизация и маршруты', () => {
     renderApp('/knowledge/articles/new');
 
     expect(await screen.findByRole('heading', { name: 'Войти' })).toBeInTheDocument();
+  });
+
+  it('защищает библиотеку и возвращает в неё после входа', async () => {
+    const emptyPage = { count: 0, next: null, previous: null, results: [] };
+    mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+      '/api/auth/login/': () => Promise.resolve(jsonResponse(session)),
+      '/api/knowledge/library/': () => Promise.resolve(jsonResponse(emptyPage)),
+    });
+    const browser = userEvent.setup();
+
+    renderApp('/knowledge/library');
+    await screen.findByRole('heading', { name: 'Войти' });
+    await fillLoginForm(browser);
+
+    expect(await screen.findByRole('heading', { name: 'Моя библиотека' }))
+      .toBeInTheDocument();
+    expect(await screen.findByRole('heading', {
+      name: 'В вашей библиотеке пока нет книг.',
+    })).toBeInTheDocument();
   });
 
   it('оставляет public author route доступным анонимному пользователю', async () => {

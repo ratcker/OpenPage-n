@@ -194,3 +194,9 @@ export function updateKnowledgeBook(bookId, data) {
     body,
   });
 }
+
+export function deleteKnowledgeBook(bookId) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/books/${bookId}/`, {
+    method: 'DELETE',
+  });
+}

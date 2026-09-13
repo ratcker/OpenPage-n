@@ -5,7 +5,9 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
 from django.test import override_settings
+from django.test.utils import CaptureQueriesContext
 from django.urls import reverse
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -13,8 +15,9 @@ from rest_framework_simplejwt.tokens import RefreshToken
 
 from accounts.models import User
 
-from .models import Book, KnowledgeProfile, UserLibraryBook
+from .models import Book, KnowledgeProfile, StorageCleanupJob, UserLibraryBook
 from .storage import LocalKnowledgeStorage, book_storage_key
+from .storage_cleanup import BOOK_DELETED
 from .test_helpers import make_epub, make_pdf
 
 
@@ -268,6 +271,7 @@ class BookDetailAPITests(KnowledgeAPITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["id"], str(book.id))
         self.assertFalse(response.data["can_edit"])
+        self.assertFalse(response.data["is_in_library"])
         self.assertNotIn("storage_key", response.data)
         self.assertNotIn("uploaded_by", response.data)
         self.assertNotIn("user", response.data)
@@ -283,6 +287,15 @@ class BookDetailAPITests(KnowledgeAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data["can_edit"])
+
+    def test_book_in_library_is_reported(self):
+        book = self.create_model_book(uploaded_by=self.other_user)
+        UserLibraryBook.objects.create(user=self.user, book=book)
+
+        response = self.get_book(book)
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data["is_in_library"])
 
     def test_foreign_private_book_returns_forbidden(self):
         book = self.create_model_book(
@@ -318,6 +331,7 @@ class AnonymousKnowledgeAPITests(KnowledgeAPITestCase):
         self.assertNotIn(str(private_book.id), result_ids)
         serialized_book = response.data["results"][0]
         self.assertFalse(serialized_book["can_edit"])
+        self.assertFalse(serialized_book["is_in_library"])
         self.assertNotIn("uploaded_by", serialized_book)
         self.assertNotIn("user", serialized_book)
 
@@ -330,6 +344,7 @@ class AnonymousKnowledgeAPITests(KnowledgeAPITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertEqual(response.data["id"], str(book.id))
+        self.assertFalse(response.data["is_in_library"])
 
     def test_private_book_detail_is_forbidden(self):
         book = self.create_model_book(visibility=Book.Visibility.PRIVATE)
@@ -339,6 +354,118 @@ class AnonymousKnowledgeAPITests(KnowledgeAPITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+
+class BookLibraryMembershipTests(KnowledgeAPITestCase):
+    def setUp(self):
+        super().setUp()
+        self.authenticate()
+
+    def test_catalog_reports_membership_for_each_book(self):
+        saved = self.create_model_book(title="Сохранённая")
+        unsaved = self.create_model_book(title="Несохранённая")
+        UserLibraryBook.objects.create(user=self.user, book=saved)
+
+        response = self.client.get(reverse("knowledge_books"))
+
+        books = {item["id"]: item for item in response.data["results"]}
+        self.assertTrue(books[str(saved.id)]["is_in_library"])
+        self.assertFalse(books[str(unsaved.id)]["is_in_library"])
+
+    def test_catalog_membership_does_not_add_queries_per_book(self):
+        self.create_model_book()
+        with CaptureQueriesContext(connection) as one_book_queries:
+            self.client.get(reverse("knowledge_books"))
+
+        for _ in range(5):
+            self.create_model_book()
+        with CaptureQueriesContext(connection) as several_books_queries:
+            self.client.get(reverse("knowledge_books"))
+
+        self.assertEqual(len(several_books_queries), len(one_book_queries))
+
+
+class BookDeleteAPITests(KnowledgeAPITestCase):
+    def delete_book(self, book):
+        return self.client.delete(
+            reverse("knowledge_book_detail", kwargs={"book_uuid": book.id})
+        )
+
+    def test_owner_deletes_public_book_and_all_library_entries(self):
+        book = self.create_model_book(uploaded_by=self.user)
+        book.cover_key = f"books/{book.id}/cover.jpg"
+        book.save(update_fields=("cover_key",))
+        own_entry = UserLibraryBook.objects.create(
+            user=self.user,
+            book=book,
+            reading_location={"type": "epub", "location": "chapter-3"},
+            reading_percentage=Decimal("42.50"),
+        )
+        other_entry = UserLibraryBook.objects.create(user=self.other_user, book=book)
+        untouched = self.create_model_book(uploaded_by=self.other_user)
+        untouched_entry = UserLibraryBook.objects.create(user=self.user, book=untouched)
+        self.authenticate()
+
+        with patch("knowledge.storage.S3KnowledgeStorage.delete") as storage_delete:
+            response = self.delete_book(book)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.content, b"")
+        self.assertFalse(Book.objects.filter(id=book.id).exists())
+        self.assertFalse(
+            UserLibraryBook.objects.filter(id__in=(own_entry.id, other_entry.id)).exists()
+        )
+        self.assertTrue(Book.objects.filter(id=untouched.id).exists())
+        self.assertTrue(UserLibraryBook.objects.filter(id=untouched_entry.id).exists())
+        self.assertCountEqual(
+            StorageCleanupJob.objects.values_list("storage_key", flat=True),
+            [book.storage_key, book.cover_key],
+        )
+        self.assertEqual(
+            set(StorageCleanupJob.objects.values_list("reason", flat=True)),
+            {BOOK_DELETED},
+        )
+        storage_delete.assert_not_called()
+
+    def test_owner_deletes_private_book_without_empty_cover_job(self):
+        book = self.create_model_book(
+            uploaded_by=self.user,
+            visibility=Book.Visibility.PRIVATE,
+        )
+        self.authenticate()
+
+        response = self.delete_book(book)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(StorageCleanupJob.objects.count(), 1)
+        self.assertEqual(StorageCleanupJob.objects.get().storage_key, book.storage_key)
+
+    def test_anonymous_delete_requires_authentication(self):
+        book = self.create_model_book(uploaded_by=self.user)
+
+        response = self.delete_book(book)
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(Book.objects.filter(id=book.id).exists())
+
+    def test_other_user_cannot_delete_book(self):
+        book = self.create_model_book(uploaded_by=self.other_user)
+        self.authenticate()
+
+        response = self.delete_book(book)
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Book.objects.filter(id=book.id).exists())
+        self.assertFalse(StorageCleanupJob.objects.exists())
+
+    def test_unknown_book_returns_not_found(self):
+        self.authenticate()
+
+        response = self.client.delete(
+            reverse("knowledge_book_detail", kwargs={"book_uuid": uuid.uuid4()})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
 
 
 class BookContentAPITests(KnowledgeAPITestCase):

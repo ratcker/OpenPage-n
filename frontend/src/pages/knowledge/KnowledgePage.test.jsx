@@ -31,6 +31,7 @@ const publicBook = {
   publisher: 'Опенпейч Пресс',
   cover_url: 'https://storage.example.test/public-cover.jpg',
   can_edit: false,
+  is_in_library: false,
   format: 'epub',
   visibility: 'public',
   status: 'ready',
@@ -50,6 +51,7 @@ const libraryBook = {
   publisher: 'Library Press',
   cover_url: null,
   can_edit: true,
+  is_in_library: true,
 };
 
 const libraryItem = {
@@ -163,7 +165,7 @@ afterEach(() => {
 });
 
 describe('KnowledgePage', () => {
-  it('показывает edit для own public-книги каталога только по can_edit', async () => {
+  it('оставляет редактирование за страницей книги даже для владельца', async () => {
     const ownPublicBook = {
       ...publicBook,
       id: '0419adef-86ac-42b6-8d85-0437dad1af85',
@@ -175,7 +177,6 @@ describe('KnowledgePage', () => {
         jsonResponse(page([publicBook, ownPublicBook])),
       ),
     });
-    const browser = userEvent.setup();
     renderPage();
 
     const ownCard = (await screen.findByRole('heading', {
@@ -185,16 +186,16 @@ describe('KnowledgePage', () => {
       name: publicBook.title,
     }).closest('article');
 
-    expect(within(ownCard).getByRole('button', { name: 'Редактировать' }))
-      .toBeInTheDocument();
+    expect(within(ownCard).queryByRole('button', { name: 'Редактировать' }))
+      .not.toBeInTheDocument();
     expect(within(foreignCard).queryByRole('button', { name: 'Редактировать' }))
       .not.toBeInTheDocument();
 
-    await browser.click(within(ownCard).getByRole('button', { name: 'Редактировать' }));
-    expect(screen.getByRole('dialog', { name: 'Редактировать книгу' })).toBeInTheDocument();
+    expect(within(ownCard).getByRole('link', { name: 'Открыть книгу' }))
+      .toHaveAttribute('href', `/knowledge/books/${ownPublicBook.id}`);
   });
 
-  it('использует item.book.can_edit в library без visibility-эвристики', async () => {
+  it('не загружает личную библиотеку на странице каталога', async () => {
     const editablePublicBook = {
       ...publicBook,
       id: 'a9292673-4026-42b0-bf4c-9f47a5e818f3',
@@ -207,39 +208,23 @@ describe('KnowledgePage', () => {
       title: 'Недоступная приватная книга',
       can_edit: false,
     };
-    mockKnowledgeApi({
-      '/api/knowledge/library/': () => Promise.resolve(jsonResponse(page([
-        { ...libraryItem, id: 31, book: editablePublicBook },
-        { ...libraryItem, id: 32, book: lockedPrivateBook },
-      ]))),
-    });
+    const fetchMock = mockKnowledgeApi();
     renderPage();
 
-    const editableCard = (await screen.findByRole('heading', {
-      name: editablePublicBook.title,
-    })).closest('article');
-    const lockedCard = screen.getByRole('heading', {
-      name: lockedPrivateBook.title,
-    }).closest('article');
-
-    expect(within(editableCard).getByRole('button', { name: 'Редактировать' }))
-      .toBeInTheDocument();
-    expect(within(lockedCard).queryByRole('button', { name: 'Редактировать' }))
-      .not.toBeInTheDocument();
-    expect(within(lockedCard).getByRole('link', { name: 'Читать' })).toBeInTheDocument();
+    await screen.findByRole('heading', { name: publicBook.title });
+    expect(fetchMock.mock.calls.map(([path]) => path))
+      .not.toContain('/api/knowledge/library/');
+    expect(screen.queryByText(editablePublicBook.title)).not.toBeInTheDocument();
+    expect(screen.queryByText(lockedPrivateBook.title)).not.toBeInTheDocument();
   });
 
-  it('показывает реальные covers, fallback и enriched metadata в обеих коллекциях', async () => {
+  it('показывает cover, metadata и основные ссылки каталога без описания', async () => {
     mockKnowledgeApi();
     renderPage();
 
     const catalogCard = (await screen.findByRole('heading', {
       name: publicBook.title,
     })).closest('article');
-    const libraryCard = screen.getByRole('heading', {
-      name: libraryBook.title,
-    }).closest('article');
-
     expect(within(catalogCard).getByRole('img', {
       name: `Обложка книги «${publicBook.title}»`,
     })).toHaveAttribute('src', publicBook.cover_url);
@@ -247,12 +232,13 @@ describe('KnowledgePage', () => {
     expect(within(catalogCard).getByText('Опенпейч Пресс')).toBeInTheDocument();
     expect(within(catalogCard).getByText('RU')).toBeInTheDocument();
 
-    expect(within(libraryCard).getByRole('img', {
-      name: `Обложка книги «${libraryBook.title}» отсутствует`,
-    })).toBeInTheDocument();
-    expect(within(libraryCard).getByText('Автор библиотеки · 2022')).toBeInTheDocument();
-    expect(within(libraryCard).getByText('Library Press')).toBeInTheDocument();
-    expect(within(libraryCard).getByText('EN')).toBeInTheDocument();
+    expect(within(catalogCard).queryByText(publicBook.description)).not.toBeInTheDocument();
+    expect(within(catalogCard).queryByRole('button', { name: 'Редактировать' }))
+      .not.toBeInTheDocument();
+    expect(within(catalogCard).getByRole('link', { name: 'Читать' }))
+      .toHaveAttribute('href', `/knowledge/books/${publicBook.id}/read`);
+    expect(within(catalogCard).getByRole('link', { name: 'Открыть книгу' }))
+      .toHaveAttribute('href', `/knowledge/books/${publicBook.id}`);
   });
 
   it('не рисует пустые optional metadata', async () => {
@@ -277,14 +263,12 @@ describe('KnowledgePage', () => {
     expect(card).not.toHaveTextContent('unknown');
   });
 
-  it('запрашивает и показывает каталог, библиотеку, progress и профиль', async () => {
+  it('запрашивает и показывает каталог и профиль без загрузки библиотеки', async () => {
     const fetchMock = mockKnowledgeApi();
 
     renderPage();
 
     expect(await screen.findByRole('heading', { name: publicBook.title })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: libraryBook.title })).toBeInTheDocument();
-    expect(screen.getByText('37.50%')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: profile.display_name })).toBeInTheDocument();
     expect(screen.getByText(profile.bio)).toBeInTheDocument();
     expect(screen.getByRole('img', {
@@ -296,10 +280,9 @@ describe('KnowledgePage', () => {
     expect(screen.getByRole('link', { name: 'Открыть публичный профиль' }))
       .toHaveAttribute('href', `/knowledge/authors/${profile.id}`);
     expect(screen.getByRole('button', { name: 'Загрузить книгу' })).toBeInTheDocument();
-    expect(screen.getAllByRole('link', { name: 'Читать' })).toHaveLength(2);
-    expect(screen.getAllByRole('link', { name: 'Читать' })[0]).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Читать' })).toHaveAttribute(
       'href',
-      `/knowledge/books/${libraryBook.id}/read`,
+      `/knowledge/books/${publicBook.id}/read`,
     );
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -310,15 +293,12 @@ describe('KnowledgePage', () => {
       }),
     );
 
-    for (const path of [
-      '/api/knowledge/library/',
-      '/api/knowledge/profile/',
-    ]) {
-      expect(fetchMock).toHaveBeenCalledWith(path, expect.objectContaining({
-        credentials: 'include',
-        headers: expect.objectContaining({ Authorization: 'Bearer knowledge-token' }),
-      }));
-    }
+    expect(fetchMock).toHaveBeenCalledWith('/api/knowledge/profile/', expect.objectContaining({
+      credentials: 'include',
+      headers: expect.objectContaining({ Authorization: 'Bearer knowledge-token' }),
+    }));
+    expect(fetchMock.mock.calls.map(([path]) => path))
+      .not.toContain('/api/knowledge/library/');
   });
 
   it('показывает anonymous пользователю только публичный каталог', async () => {
@@ -328,10 +308,6 @@ describe('KnowledgePage', () => {
 
     expect(await screen.findByRole('heading', { name: publicBook.title })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Публичный каталог' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', {
-      name: 'Войдите, чтобы открыть личную библиотеку.',
-    })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Войти' })).toHaveAttribute('href', '/login');
     expect(screen.getByRole('link', { name: 'Войти, чтобы добавить' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Читать' })).toHaveAttribute(
       'href',
@@ -347,12 +323,11 @@ describe('KnowledgePage', () => {
     expect(fetchMock.mock.calls[0][1].headers).toBeUndefined();
   });
 
-  it('показывает статус книги, уже находящейся в библиотеке', async () => {
-    const existingEntry = { ...libraryItem, id: 24, book: publicBook };
+  it('берёт статус книги в библиотеке из каталога', async () => {
     mockKnowledgeApi({
-      '/api/knowledge/library/': () => Promise.resolve(
-        jsonResponse(page([existingEntry, libraryItem])),
-      ),
+      '/api/knowledge/books/': () => Promise.resolve(jsonResponse(page([
+        { ...publicBook, is_in_library: true },
+      ]))),
     });
 
     renderPage();
@@ -361,7 +336,7 @@ describe('KnowledgePage', () => {
     expect(screen.queryByRole('button', { name: 'Добавить в библиотеку' })).not.toBeInTheDocument();
   });
 
-  it.each([200, 201])('считает add response %s успешным и обновляет библиотеку', async (responseStatus) => {
+  it.each([200, 201])('считает add response %s успешным и локально обновляет карточку', async (responseStatus) => {
     const addedEntry = {
       ...libraryItem,
       id: 25,
@@ -377,8 +352,7 @@ describe('KnowledgePage', () => {
     await browser.click(await screen.findByRole('button', { name: 'Добавить в библиотеку' }));
 
     expect(await screen.findByRole('button', { name: 'В библиотеке' })).toBeDisabled();
-    const library = screen.getByRole('region', { name: 'Ваши книги' });
-    expect(within(library).getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
     expect(addHandler).toHaveBeenCalledTimes(1);
     expect(fetchMock).toHaveBeenCalledWith(addPath, expect.objectContaining({
       method: 'POST',
@@ -403,7 +377,7 @@ describe('KnowledgePage', () => {
     expect(screen.getByRole('button', { name: 'Добавить в библиотеку' })).toBeEnabled();
   });
 
-  it('показывает независимые loading states без изменения макета', () => {
+  it('показывает независимые loading states каталога и профиля', () => {
     const pendingRequest = new Promise(() => {});
     mockKnowledgeApi({
       '/api/knowledge/books/': () => pendingRequest,
@@ -414,25 +388,14 @@ describe('KnowledgePage', () => {
     renderPage();
 
     expect(screen.getByRole('status', { name: 'Загружаем публичные книги…' })).toBeInTheDocument();
-    expect(screen.getByRole('status', { name: 'Загружаем вашу библиотеку…' })).toBeInTheDocument();
     expect(screen.getByText('Загружаем профиль…')).toBeInTheDocument();
   });
 
-  it('переключает страницы каталога и библиотеки независимо', async () => {
+  it('переключает страницы каталога', async () => {
     const catalogSecondBook = {
       ...publicBook,
       id: '711965a3-d329-479e-9758-cf5b8f8d66db',
       title: 'Двадцать первая книга каталога',
-    };
-    const librarySecondBook = {
-      ...libraryBook,
-      id: 'f24d17cd-1575-4eb4-b613-b8aa2b3a45dc',
-      title: 'Двадцать первая книга библиотеки',
-    };
-    const librarySecondItem = {
-      ...libraryItem,
-      id: 39,
-      book: librarySecondBook,
     };
     const fetchMock = mockKnowledgeApi({
       '/api/knowledge/books/': () => Promise.resolve(jsonResponse({
@@ -447,18 +410,6 @@ describe('KnowledgePage', () => {
         previous: '/api/knowledge/books/',
         results: [catalogSecondBook],
       })),
-      '/api/knowledge/library/': () => Promise.resolve(jsonResponse({
-        count: 21,
-        next: '/api/knowledge/library/?page=2',
-        previous: null,
-        results: [libraryItem],
-      })),
-      '/api/knowledge/library/?page=2': () => Promise.resolve(jsonResponse({
-        count: 21,
-        next: null,
-        previous: '/api/knowledge/library/',
-        results: [librarySecondItem],
-      })),
     });
     const browser = userEvent.setup();
     renderPage();
@@ -466,21 +417,10 @@ describe('KnowledgePage', () => {
     const catalogPages = await screen.findByRole('navigation', {
       name: 'Страницы: Публичные книги',
     });
-    const libraryPages = screen.getByRole('navigation', {
-      name: 'Страницы: Ваши книги',
-    });
     await browser.click(within(catalogPages).getByRole('button', { name: 'Далее' }));
 
     expect(await screen.findByRole('heading', {
       name: catalogSecondBook.title,
-    })).toBeInTheDocument();
-    expect(within(libraryPages).getByText('Страница 1')).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: libraryBook.title })).toBeInTheDocument();
-
-    await browser.click(within(libraryPages).getByRole('button', { name: 'Далее' }));
-
-    expect(await screen.findByRole('heading', {
-      name: librarySecondBook.title,
     })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: catalogSecondBook.title })).toBeInTheDocument();
     expect(fetchMock).toHaveBeenCalledWith(
@@ -489,15 +429,9 @@ describe('KnowledgePage', () => {
         headers: expect.objectContaining({ Authorization: 'Bearer knowledge-token' }),
       }),
     );
-    expect(fetchMock).toHaveBeenCalledWith(
-      '/api/knowledge/library/?page=2',
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: 'Bearer knowledge-token' }),
-      }),
-    );
   });
 
-  it('показывает отдельные empty states каталога и библиотеки', async () => {
+  it('показывает empty state каталога', async () => {
     mockKnowledgeApi({
       '/api/knowledge/books/': () => Promise.resolve(jsonResponse(emptyPage)),
       '/api/knowledge/library/': () => Promise.resolve(jsonResponse(emptyPage)),
@@ -506,10 +440,9 @@ describe('KnowledgePage', () => {
     renderPage();
 
     expect(await screen.findByRole('heading', { name: 'Публичных книг пока нет.' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'В вашей библиотеке пока нет книг.' })).toBeInTheDocument();
   });
 
-  it('не ломает библиотеку и профиль при ошибке каталога', async () => {
+  it('не ломает профиль при ошибке каталога', async () => {
     mockKnowledgeApi({
       '/api/knowledge/books/': () => Promise.resolve(
         jsonResponse({ detail: 'Ошибка каталога' }, 500),
@@ -519,21 +452,6 @@ describe('KnowledgePage', () => {
     renderPage();
 
     expect(await screen.findByRole('heading', { name: 'Не удалось загрузить каталог.' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: libraryBook.title })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: profile.display_name })).toBeInTheDocument();
-  });
-
-  it('не ломает каталог и профиль при ошибке библиотеки', async () => {
-    mockKnowledgeApi({
-      '/api/knowledge/library/': () => Promise.resolve(
-        jsonResponse({ detail: 'Ошибка библиотеки' }, 500),
-      ),
-    });
-
-    renderPage();
-
-    expect(await screen.findByRole('heading', { name: 'Не удалось загрузить библиотеку.' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: profile.display_name })).toBeInTheDocument();
   });
 
@@ -791,7 +709,7 @@ describe('KnowledgePage', () => {
     expect(uploadOptions.body.get('publisher')).toBeNull();
   });
 
-  it('отправляет FormData и после public upload обновляет библиотеку и каталог', async () => {
+  it('отправляет FormData и после public upload обновляет каталог', async () => {
     const uploadedBook = {
       ...publicBook,
       id: 'eb56e24a-6c4c-4dbf-903c-768df56e1ed4',
@@ -801,14 +719,7 @@ describe('KnowledgePage', () => {
       format: 'pdf',
       can_edit: true,
     };
-    const uploadedEntry = {
-      ...libraryItem,
-      id: 26,
-      book: uploadedBook,
-      reading_percentage: '0.00',
-    };
     let booksReads = 0;
-    let libraryReads = 0;
     let uploadOptions;
     mockKnowledgeApi({
       '/api/knowledge/books/': (options) => {
@@ -821,13 +732,6 @@ describe('KnowledgePage', () => {
           ? [publicBook]
           : [uploadedBook, publicBook];
         return Promise.resolve(jsonResponse(page(books)));
-      },
-      '/api/knowledge/library/': () => {
-        libraryReads += 1;
-        const entries = libraryReads === 1
-          ? [libraryItem]
-          : [uploadedEntry, libraryItem];
-        return Promise.resolve(jsonResponse(page(entries)));
       },
     });
     const browser = userEvent.setup();
@@ -849,12 +753,8 @@ describe('KnowledgePage', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
     });
-    expect(screen.getAllByRole('heading', { name: uploadedBook.title })).toHaveLength(2);
-    for (const heading of screen.getAllByRole('heading', { name: uploadedBook.title })) {
-      expect(within(heading.closest('article')).getByRole('button', {
-        name: 'Редактировать',
-      })).toBeInTheDocument();
-    }
+    expect(screen.getByRole('heading', { name: uploadedBook.title })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument();
     expect(uploadOptions.body).toBeInstanceOf(FormData);
     expect(uploadOptions.headers).not.toHaveProperty('Content-Type');
     expect(uploadOptions.body.get('file')).toEqual(values.file);
@@ -965,90 +865,6 @@ describe('KnowledgePage', () => {
     await waitFor(() => {
       expect(screen.queryByRole('dialog', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
     });
-  });
-
-  it('редактирует metadata собственной private-книги через multipart PATCH', async () => {
-    const updatedBook = {
-      ...libraryBook,
-      title: 'Обновлённая книга',
-      cover_url: 'https://storage.example.test/new-cover.png',
-    };
-    const updatedItem = { ...libraryItem, book: updatedBook };
-    const patchPath = `/api/knowledge/books/${libraryBook.id}/`;
-    let patchOptions;
-    let libraryReads = 0;
-    mockKnowledgeApi({
-      [patchPath]: (options) => {
-        patchOptions = options;
-        return Promise.resolve(jsonResponse(updatedBook));
-      },
-      '/api/knowledge/library/': () => {
-        libraryReads += 1;
-        return Promise.resolve(jsonResponse(page([
-          libraryReads === 1 ? libraryItem : updatedItem,
-        ])));
-      },
-    });
-    const browser = userEvent.setup();
-    renderPage();
-
-    expect(await screen.findAllByRole('button', { name: 'Редактировать' })).toHaveLength(1);
-    await browser.click(screen.getByRole('button', { name: 'Редактировать' }));
-
-    expect(screen.getByRole('dialog', { name: 'Редактировать книгу' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Название')).toHaveValue(libraryBook.title);
-    expect(screen.getByLabelText('Автор')).toHaveValue(libraryBook.author);
-    expect(screen.getByLabelText('Описание')).toHaveValue(libraryBook.description);
-    expect(screen.getByLabelText('Язык')).toHaveValue(libraryBook.language);
-    expect(screen.getByLabelText('Год')).toHaveValue(libraryBook.year);
-    expect(screen.getByLabelText('Издательство')).toHaveValue(libraryBook.publisher);
-
-    await browser.clear(screen.getByLabelText('Название'));
-    await browser.type(screen.getByLabelText('Название'), updatedBook.title);
-    const cover = new File(['new-cover'], 'new-cover.png', { type: 'image/png' });
-    await browser.upload(screen.getByLabelText('Обложка'), cover);
-    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
-
-    expect(await screen.findByRole('heading', { name: updatedBook.title })).toBeInTheDocument();
-    const updatedCard = screen.getByRole('heading', {
-      name: updatedBook.title,
-    }).closest('article');
-    expect(within(updatedCard).getByRole('button', { name: 'Редактировать' }))
-      .toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: 'Редактировать книгу' })).not.toBeInTheDocument();
-    expect(patchOptions.method).toBe('PATCH');
-    expect(patchOptions.body).toBeInstanceOf(FormData);
-    expect(patchOptions.headers).not.toHaveProperty('Content-Type');
-    expect(patchOptions.body.get('title')).toBe(updatedBook.title);
-    expect(patchOptions.body.get('cover')).toEqual(cover);
-    for (const field of ['visibility', 'format', 'status', 'storage_key', 'uploaded_by']) {
-      expect(patchOptions.body.has(field)).toBe(false);
-    }
-  });
-
-  it.each([
-    [400, { year: ['Введите корректный год.'] }, 'Введите корректный год.'],
-    [403, { detail: 'Нет доступа.' }, 'У вас нет доступа к редактированию этой книги.'],
-  ])('сохраняет edit form и показывает понятную ошибку при %s', async (
-    responseStatus,
-    responseBody,
-    expectedError,
-  ) => {
-    const patchPath = `/api/knowledge/books/${libraryBook.id}/`;
-    mockKnowledgeApi({
-      [patchPath]: () => Promise.resolve(jsonResponse(responseBody, responseStatus)),
-    });
-    const browser = userEvent.setup();
-    renderPage();
-
-    await browser.click(await screen.findByRole('button', { name: 'Редактировать' }));
-    await browser.clear(screen.getByLabelText('Название'));
-    await browser.type(screen.getByLabelText('Название'), 'Черновик изменений');
-    await browser.click(screen.getByRole('button', { name: 'Сохранить' }));
-
-    expect(await screen.findByRole('alert')).toHaveTextContent(expectedError);
-    expect(screen.getByRole('dialog', { name: 'Редактировать книгу' })).toBeInTheDocument();
-    expect(screen.getByLabelText('Название')).toHaveValue('Черновик изменений');
   });
 
   it('считает отсутствие профиля нормальным состоянием читателя', async () => {
