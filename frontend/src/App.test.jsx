@@ -1,12 +1,24 @@
 import { StrictMode } from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  RouterProvider,
+} from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App.jsx';
 import { authorizedRequest, clearSession } from './api/client.js';
 import AuthProvider from './auth/AuthProvider.jsx';
+import LandingPage from './pages/LandingPage.jsx';
+import RootPage from './pages/RootPage.jsx';
 import {
   jsonResponse,
   mockSession as session,
@@ -140,13 +152,56 @@ describe('авторизация и маршруты', () => {
     }));
   });
 
-  it.each([
-    ['/', 'Перейти в хаб'],
-    ['/hub', 'Сервисы рядом'],
-  ])('оставляет %s публичным', (route, accessibleName) => {
-    renderApp(route, false);
+  it('перенаправляет публичный корневой маршрут на /hub без старого интерфейса', async () => {
+    renderApp('/', false);
 
-    expect(screen.getByRole(route === '/' ? 'link' : 'heading', { name: accessibleName })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Сервисы рядом' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Перейти в хаб' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Войти в аккаунт' })).not.toBeInTheDocument();
+  });
+
+  it('заменяет / в истории при перенаправлении на /hub', async () => {
+    const router = createMemoryRouter([
+      { path: '/', element: <RootPage /> },
+      { path: '/hub', element: <h1>Хаб после перенаправления</h1> },
+      { path: '/before', element: <h1>Предыдущая страница</h1> },
+    ], {
+      initialEntries: ['/before', '/'],
+      initialIndex: 1,
+    });
+    render(<RouterProvider router={router} />);
+
+    expect(await screen.findByRole('heading', { name: 'Хаб после перенаправления' }))
+      .toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/hub');
+
+    await act(() => router.navigate(-1));
+    expect(await screen.findByRole('heading', { name: 'Предыдущая страница' }))
+      .toBeInTheDocument();
+  });
+
+  it('сохраняет старую визуальную заготовку без двух CTA-кнопок', () => {
+    const view = render(
+      <MemoryRouter>
+        <LandingPage />
+      </MemoryRouter>,
+    );
+
+    expect(view.container.querySelector('.landing')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Перейти в хаб' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Войти в аккаунт' })).not.toBeInTheDocument();
+  });
+
+  it('оставляет /hub публичным и сохраняет ссылки Header', () => {
+    renderApp('/hub', false);
+
+    expect(screen.getByRole('heading', { name: 'Сервисы рядом' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'На лендинг' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Хаб' })).toHaveAttribute('href', '/hub');
+    expect(screen.getByRole('link', { name: 'Сервисы' })).toHaveAttribute(
+      'href',
+      '/hub#services',
+    );
   });
 
   it('открывает Базу знаний из каталога, сохраняя карточку будущих сервисов', async () => {

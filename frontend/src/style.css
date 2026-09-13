@@ -96,34 +96,6 @@ a {
   padding: 48px 16px;
 }
 
-.landing-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.hub-button {
-  width: 52px;
-  height: 52px;
-  display: grid;
-  place-items: center;
-  border: 1px solid #8050e7;
-  border-radius: 8px;
-  background: var(--accent-dark);
-}
-
-.hub-button:hover {
-  background: #8050e7;
-}
-
-.hub-button svg {
-  width: 20px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.5;
-}
-
 /* Шапка */
 .header {
   border-bottom: 1px solid var(--line);

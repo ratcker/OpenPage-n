@@ -15,9 +15,9 @@ import KnowledgePage from './pages/knowledge/KnowledgePage.jsx';
 import LibraryPage from './pages/knowledge/LibraryPage.jsx';
 import PublicAuthorPage from './pages/knowledge/PublicAuthorPage.jsx';
 import ReaderPage from './pages/knowledge/ReaderPage.jsx';
-import LandingPage from './pages/LandingPage.jsx';
 import LoginPage from './pages/LoginPage/LoginPage.jsx';
 import ProfilePage from './pages/ProfilePage/ProfilePage.jsx';
+import RootPage from './pages/RootPage.jsx';
 
 // Авторизованному пользователю форма входа уже не нужна.
 function LoginRoute() {
@@ -34,7 +34,7 @@ function LoginRoute() {
 export default function App() {
   return (
     <Routes>
-      <Route path="/" element={<LandingPage />} />
+      <Route path="/" element={<RootPage />} />
       <Route path="/login" element={<LoginRoute />} />
       <Route path="/hub" element={<HubPage />} />
       <Route path="/knowledge" element={<KnowledgePage />} />
