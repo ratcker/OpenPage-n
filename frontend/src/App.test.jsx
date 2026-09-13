@@ -1,12 +1,24 @@
 import { StrictMode } from 'react';
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import {
+  act,
+  cleanup,
+  render,
+  screen,
+  waitFor,
+} from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { MemoryRouter } from 'react-router-dom';
+import {
+  createMemoryRouter,
+  MemoryRouter,
+  RouterProvider,
+} from 'react-router-dom';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App.jsx';
 import { authorizedRequest, clearSession } from './api/client.js';
 import AuthProvider from './auth/AuthProvider.jsx';
+import LandingPage from './pages/LandingPage.jsx';
+import RootPage from './pages/RootPage.jsx';
 import {
   jsonResponse,
   mockSession as session,
@@ -75,6 +87,8 @@ describe('авторизация и маршруты', () => {
     expect(await screen.findByRole('heading', { name: 'Профиль' })).toBeInTheDocument();
     expect(screen.getByText(user.name)).toBeInTheDocument();
     expect(screen.getByText(user.email)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Моя библиотека' }))
+      .toHaveAttribute('href', '/knowledge/library');
     expect(loginHandler).toHaveBeenCalledWith(expect.objectContaining({
       method: 'POST',
       credentials: 'include',
@@ -138,13 +152,56 @@ describe('авторизация и маршруты', () => {
     }));
   });
 
-  it.each([
-    ['/', 'Перейти в хаб'],
-    ['/hub', 'Сервисы рядом'],
-  ])('оставляет %s публичным', (route, accessibleName) => {
-    renderApp(route, false);
+  it('перенаправляет публичный корневой маршрут на /hub без старого интерфейса', async () => {
+    renderApp('/', false);
 
-    expect(screen.getByRole(route === '/' ? 'link' : 'heading', { name: accessibleName })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Сервисы рядом' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Перейти в хаб' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Войти в аккаунт' })).not.toBeInTheDocument();
+  });
+
+  it('заменяет / в истории при перенаправлении на /hub', async () => {
+    const router = createMemoryRouter([
+      { path: '/', element: <RootPage /> },
+      { path: '/hub', element: <h1>Хаб после перенаправления</h1> },
+      { path: '/before', element: <h1>Предыдущая страница</h1> },
+    ], {
+      initialEntries: ['/before', '/'],
+      initialIndex: 1,
+    });
+    render(<RouterProvider router={router} />);
+
+    expect(await screen.findByRole('heading', { name: 'Хаб после перенаправления' }))
+      .toBeInTheDocument();
+    expect(router.state.location.pathname).toBe('/hub');
+
+    await act(() => router.navigate(-1));
+    expect(await screen.findByRole('heading', { name: 'Предыдущая страница' }))
+      .toBeInTheDocument();
+  });
+
+  it('сохраняет старую визуальную заготовку без двух CTA-кнопок', () => {
+    const view = render(
+      <MemoryRouter>
+        <LandingPage />
+      </MemoryRouter>,
+    );
+
+    expect(view.container.querySelector('.landing')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Перейти в хаб' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Войти в аккаунт' })).not.toBeInTheDocument();
+  });
+
+  it('оставляет /hub публичным и сохраняет ссылки Header', () => {
+    renderApp('/hub', false);
+
+    expect(screen.getByRole('heading', { name: 'Сервисы рядом' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'На лендинг' })).toHaveAttribute('href', '/');
+    expect(screen.getByRole('link', { name: 'Хаб' })).toHaveAttribute('href', '/hub');
+    expect(screen.getByRole('link', { name: 'Сервисы' })).toHaveAttribute(
+      'href',
+      '/hub#services',
+    );
   });
 
   it('открывает Базу знаний из каталога, сохраняя карточку будущих сервисов', async () => {
@@ -192,9 +249,6 @@ describe('авторизация и маршруты', () => {
 
     expect(await screen.findByRole('heading', { name: 'База знаний' })).toBeInTheDocument();
     expect(await screen.findByRole('heading', { name: 'Публичный каталог' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', {
-      name: 'Войдите, чтобы открыть личную библиотеку.',
-    })).toBeInTheDocument();
     expect(screen.queryByRole('heading', { name: 'Войти' })).not.toBeInTheDocument();
 
     const requestedPaths = fetchMock.mock.calls.map(([path]) => path);
@@ -244,6 +298,26 @@ describe('авторизация и маршруты', () => {
     renderApp('/knowledge/articles/new');
 
     expect(await screen.findByRole('heading', { name: 'Войти' })).toBeInTheDocument();
+  });
+
+  it('защищает библиотеку и возвращает в неё после входа', async () => {
+    const emptyPage = { count: 0, next: null, previous: null, results: [] };
+    mockApi({
+      '/api/auth/refresh/': anonymousRefresh,
+      '/api/auth/login/': () => Promise.resolve(jsonResponse(session)),
+      '/api/knowledge/library/': () => Promise.resolve(jsonResponse(emptyPage)),
+    });
+    const browser = userEvent.setup();
+
+    renderApp('/knowledge/library');
+    await screen.findByRole('heading', { name: 'Войти' });
+    await fillLoginForm(browser);
+
+    expect(await screen.findByRole('heading', { name: 'Моя библиотека' }))
+      .toBeInTheDocument();
+    expect(await screen.findByRole('heading', {
+      name: 'В вашей библиотеке пока нет книг.',
+    })).toBeInTheDocument();
   });
 
   it('оставляет public author route доступным анонимному пользователю', async () => {

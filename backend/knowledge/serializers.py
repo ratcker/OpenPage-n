@@ -55,6 +55,7 @@ class OptionalMetadataSerializer(serializers.Serializer):
 class BookSerializer(serializers.ModelSerializer):
     cover_url = serializers.SerializerMethodField()
     can_edit = serializers.SerializerMethodField()
+    is_in_library = serializers.SerializerMethodField()
     publication_basis = serializers.ChoiceField(
         choices=Book.PublicationBasis.choices,
         read_only=True,
@@ -88,6 +89,21 @@ class BookSerializer(serializers.ModelSerializer):
         user = getattr(request, "user", None)
         return bool(user and user.is_authenticated and book.uploaded_by_id == user.id)
 
+    def get_is_in_library(self, book) -> bool:
+        annotated = getattr(book, "is_in_library", None)
+        if annotated is not None:
+            return bool(annotated)
+
+        library_book_ids = self.context.get("library_book_ids")
+        if library_book_ids is not None:
+            return book.id in library_book_ids
+
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if not user or not user.is_authenticated:
+            return False
+        return UserLibraryBook.objects.filter(user=user, book=book).exists()
+
     class Meta:
         model = Book
         fields = (
@@ -100,6 +116,7 @@ class BookSerializer(serializers.ModelSerializer):
             "publisher",
             "cover_url",
             "can_edit",
+            "is_in_library",
             "format",
             "visibility",
             "publication_basis",

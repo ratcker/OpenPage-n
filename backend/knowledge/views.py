@@ -2,7 +2,7 @@ import base64
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Q
+from django.db.models import BooleanField, Exists, OuterRef, Q, Value
 from django.db.utils import IntegrityError
 from django.shortcuts import get_object_or_404
 from drf_spectacular.utils import OpenApiExample, OpenApiResponse, extend_schema
@@ -41,6 +41,7 @@ from .services import (
     update_knowledge_profile,
 )
 from .storage import get_knowledge_storage
+from .storage_cleanup import delete_storage_backed_queryset
 
 KNOWLEDGE_TAG = "База знаний"
 BOOK_MAX_UPLOAD_MB = settings.KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES // (1024 * 1024)
@@ -68,6 +69,18 @@ def _get_or_add_library_book(user, book):
     return UserLibraryBook.objects.get_or_create(user=user, book=book)
 
 
+def _with_library_membership(queryset, user):
+    if not user.is_authenticated:
+        return queryset.annotate(
+            is_in_library=Value(False, output_field=BooleanField())
+        )
+    return queryset.annotate(
+        is_in_library=Exists(
+            UserLibraryBook.objects.filter(user=user, book_id=OuterRef("pk"))
+        )
+    )
+
+
 class BookListView(GenericAPIView):
     permission_classes = (IsAuthenticated,)
     parser_classes = (MultiPartParser,)
@@ -89,8 +102,9 @@ class BookListView(GenericAPIView):
         responses={200: BookSerializer(many=True)},
     )
     def get(self, request):
-        books = Book.objects.filter(
-            visibility=Book.Visibility.PUBLIC,
+        books = _with_library_membership(
+            Book.objects.filter(visibility=Book.Visibility.PUBLIC),
+            request.user,
         ).order_by("-created_at", "-id")
         page = self.paginate_queryset(books)
         serializer = BookSerializer(page, many=True, context={"request": request})
@@ -229,7 +243,10 @@ class BookDetailView(GenericAPIView):
         },
     )
     def get(self, request, book_uuid):
-        book = get_object_or_404(Book, id=book_uuid)
+        book = get_object_or_404(
+            _with_library_membership(Book.objects.all(), request.user),
+            id=book_uuid,
+        )
         if not _can_access_book(request.user, book):
             raise PermissionDenied("Эта приватная книга вам недоступна.")
         return Response(BookSerializer(book, context={"request": request}).data)
@@ -282,6 +299,35 @@ class BookDetailView(GenericAPIView):
                 context={"request": request, "knowledge_storage": storage},
             ).data
         )
+
+    @extend_schema(
+        operation_id="knowledge_books_delete",
+        summary="Удалить книгу",
+        description=(
+            "Полностью удаляет загруженную владельцем книгу и записи всех "
+            "читателей. Файлы и обложка удаляются через очередь очистки storage."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        responses={
+            204: OpenApiResponse(description="Книга удалена."),
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            403: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Удалять книгу может только загрузивший её пользователь.",
+            ),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Книга не найдена.",
+            ),
+        },
+    )
+    def delete(self, request, book_uuid):
+        book = get_object_or_404(Book, id=book_uuid)
+        if book.uploaded_by_id != request.user.id:
+            raise PermissionDenied("Удалять книгу может только её владелец.")
+
+        delete_storage_backed_queryset(Book.objects.filter(id=book.id))
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class EpubPreviewView(GenericAPIView):
@@ -463,7 +509,10 @@ class LibraryListView(GenericAPIView):
         serializer = UserLibraryBookSerializer(
             page,
             many=True,
-            context={"request": request},
+            context={
+                "request": request,
+                "library_book_ids": {entry.book_id for entry in page},
+            },
         )
         return self.get_paginated_response(serializer.data)
 
@@ -791,9 +840,12 @@ class PublicAuthorBooksView(GenericAPIView):
     )
     def get(self, request, profile_uuid):
         profile = get_object_or_404(KnowledgeProfile, public_id=profile_uuid)
-        books = Book.objects.filter(
-            uploaded_by_id=profile.user_id,
-            visibility=Book.Visibility.PUBLIC,
+        books = _with_library_membership(
+            Book.objects.filter(
+                uploaded_by_id=profile.user_id,
+                visibility=Book.Visibility.PUBLIC,
+            ),
+            request.user,
         ).order_by("-created_at", "-id")
         page = self.paginate_queryset(books)
         serializer = BookSerializer(page, many=True, context={"request": request})

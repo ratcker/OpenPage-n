@@ -41,6 +41,7 @@ class DocumentationTests(SimpleTestCase):
             "/api/knowledge/books/{book_uuid}/": {
                 "get": "knowledge_books_retrieve",
                 "patch": "knowledge_books_metadata_update",
+                "delete": "knowledge_books_delete",
             },
             "/api/knowledge/books/{book_uuid}/content/": {
                 "get": "knowledge_books_content_retrieve"
@@ -108,6 +109,7 @@ class DocumentationTests(SimpleTestCase):
             ("/api/knowledge/books/", "post"),
             ("/api/knowledge/books/preview/", "post"),
             ("/api/knowledge/books/{book_uuid}/", "patch"),
+            ("/api/knowledge/books/{book_uuid}/", "delete"),
             ("/api/knowledge/books/{book_uuid}/progress/", "get"),
             ("/api/knowledge/library/", "get"),
             ("/api/knowledge/library/{book_uuid}/", "post"),
@@ -153,12 +155,16 @@ class DocumentationTests(SimpleTestCase):
             {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
         )
 
-    def test_book_schema_exposes_only_computed_edit_permission(self):
+    def test_book_schema_exposes_computed_user_permissions(self):
         schema = self.schema()
         book = schema["components"]["schemas"]["Book"]
 
         self.assertEqual(
             book["properties"]["can_edit"],
+            {"type": "boolean", "readOnly": True},
+        )
+        self.assertEqual(
+            book["properties"]["is_in_library"],
             {"type": "boolean", "readOnly": True},
         )
         self.assertNotIn("uploaded_by", book["properties"])
