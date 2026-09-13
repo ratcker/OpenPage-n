@@ -19,18 +19,37 @@ import {
 import { bookDetailMetadata, formatBookProgress } from './bookPresentation.js';
 
 const initialState = { status: 'loading', book: null };
+const shareSuccessDuration = 2500;
+
+function getBookPermalink(book) {
+  return new URL(`/knowledge/books/${book.id}`, window.location.origin).toString();
+}
 
 export default function BookPage() {
   const { id: bookId } = useParams();
   const navigate = useNavigate();
   const { status: authStatus } = useAuth();
   const addPendingRef = useRef(false);
+  const sharePendingRef = useRef(false);
+  const shareResetTimerRef = useRef(null);
+  const isMountedRef = useRef(true);
   const [state, setState] = useState(initialState);
   const [progress, setProgress] = useState(null);
   const [isAdding, setIsAdding] = useState(false);
   const [addError, setAddError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [shareStatus, setShareStatus] = useState('idle');
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (shareResetTimerRef.current !== null) {
+        window.clearTimeout(shareResetTimerRef.current);
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (authStatus === 'loading') return undefined;
@@ -86,6 +105,54 @@ export default function BookPage() {
     }
   }
 
+  async function handleShare(book) {
+    if (book.visibility !== 'public' || sharePendingRef.current) return;
+
+    sharePendingRef.current = true;
+    if (shareResetTimerRef.current !== null) {
+      window.clearTimeout(shareResetTimerRef.current);
+      shareResetTimerRef.current = null;
+    }
+    setShareStatus('pending');
+
+    const url = getBookPermalink(book);
+    try {
+      if (typeof navigator.share === 'function') {
+        try {
+          await navigator.share({
+            title: book.title,
+            text: `${book.title} — ${book.author}`,
+            url,
+          });
+          if (isMountedRef.current) setShareStatus('idle');
+          return;
+        } catch (error) {
+          if (error?.name === 'AbortError') {
+            if (isMountedRef.current) setShareStatus('idle');
+            return;
+          }
+        }
+      }
+
+      try {
+        if (typeof navigator.clipboard?.writeText !== 'function') {
+          throw new Error('Clipboard API is unavailable');
+        }
+        await navigator.clipboard.writeText(url);
+        if (!isMountedRef.current) return;
+        setShareStatus('copied');
+        shareResetTimerRef.current = window.setTimeout(() => {
+          if (isMountedRef.current) setShareStatus('idle');
+          shareResetTimerRef.current = null;
+        }, shareSuccessDuration);
+      } catch {
+        if (isMountedRef.current) setShareStatus('error');
+      }
+    } finally {
+      sharePendingRef.current = false;
+    }
+  }
+
   function handleUpdated(book) {
     setState((current) => ({
       ...current,
@@ -116,6 +183,9 @@ export default function BookPage() {
     );
   } else {
     const { book } = state;
+    const isPublic = book.visibility === 'public';
+    const permalink = getBookPermalink(book);
+    const shareDescriptionId = isPublic ? undefined : 'private-book-share-description';
     content = (
       <article className="book-detail">
         <div className="book-detail-cover"><BookCover book={book} eager /></div>
@@ -158,6 +228,40 @@ export default function BookPage() {
               loginFrom={`/knowledge/books/${book.id}`}
               onAdd={handleAdd}
             />
+            <div className="book-share-control">
+              <button
+                className="book-library-action book-share-action"
+                type="button"
+                disabled={!isPublic || shareStatus === 'pending'}
+                aria-busy={shareStatus === 'pending' ? 'true' : undefined}
+                aria-describedby={shareDescriptionId}
+                onClick={() => handleShare(book)}
+              >
+                {isPublic ? 'Поделиться' : 'Пока нельзя поделиться'}
+              </button>
+              {!isPublic && (
+                <p id={shareDescriptionId} className="book-share-help">
+                  Приватная книга недоступна другим пользователям.
+                </p>
+              )}
+              {isPublic && shareStatus === 'copied' && (
+                <p className="book-share-feedback" role="status">Ссылка скопирована</p>
+              )}
+              {isPublic && shareStatus === 'error' && (
+                <div className="book-share-error" role="alert">
+                  <label htmlFor="book-share-permalink">
+                    Не удалось поделиться автоматически. Скопируйте ссылку вручную:
+                  </label>
+                  <input
+                    id="book-share-permalink"
+                    type="url"
+                    readOnly
+                    value={permalink}
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
+                </div>
+              )}
+            </div>
             {book.can_edit === true && (
               <div className="book-owner-actions">
                 <button type="button" onClick={() => setIsEditing(true)}>

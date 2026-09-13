@@ -1,7 +1,10 @@
 import {
+  act,
   cleanup,
+  fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -40,6 +43,20 @@ const book = {
 const detailPath = `/api/knowledge/books/${book.id}/`;
 const progressPath = `/api/knowledge/books/${book.id}/progress/`;
 const libraryPath = `/api/knowledge/library/${book.id}/`;
+const shareDescriptor = Object.getOwnPropertyDescriptor(navigator, 'share');
+const clipboardDescriptor = Object.getOwnPropertyDescriptor(navigator, 'clipboard');
+
+function setNavigatorProperty(name, value) {
+  Object.defineProperty(navigator, name, { configurable: true, value });
+}
+
+function restoreNavigatorProperty(name, descriptor) {
+  if (descriptor) {
+    Object.defineProperty(navigator, name, descriptor);
+  } else {
+    delete navigator[name];
+  }
+}
 
 function deferred() {
   let resolve;
@@ -91,6 +108,9 @@ afterEach(() => {
   clearSession();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  vi.useRealTimers();
+  restoreNavigatorProperty('share', shareDescriptor);
+  restoreNavigatorProperty('clipboard', clipboardDescriptor);
 });
 
 describe('BookPage', () => {
@@ -149,8 +169,156 @@ describe('BookPage', () => {
       .toHaveAttribute('src', book.cover_url);
     expect(screen.getByRole('link', { name: 'Читать' }))
       .toHaveAttribute('href', `/knowledge/books/${book.id}/read`);
+    expect(screen.getByRole('button', { name: 'Поделиться' })).toBeEnabled();
     expect(screen.queryByRole('button', { name: 'Редактировать' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Удалить книгу' })).not.toBeInTheDocument();
+  });
+
+  it('отправляет через Web Share только постоянную ссылку на публичную книгу', async () => {
+    const pending = deferred();
+    const share = vi.fn(() => pending.promise);
+    const writeText = vi.fn();
+    mockApi();
+    const browser = userEvent.setup();
+    setNavigatorProperty('share', share);
+    setNavigatorProperty('clipboard', { writeText });
+    renderPage();
+
+    const shareButton = await screen.findByRole('button', { name: 'Поделиться' });
+    await browser.click(shareButton);
+    await browser.click(shareButton);
+
+    const permalink = new URL(`/knowledge/books/${book.id}`, window.location.origin).toString();
+    expect(share).toHaveBeenCalledTimes(1);
+    expect(share).toHaveBeenCalledWith({
+      title: book.title,
+      text: `${book.title} — ${book.author}`,
+      url: permalink,
+    });
+    expect(share.mock.calls[0][0].url).not.toContain('storage.example.test');
+    expect(share.mock.calls[0][0].url).not.toMatch(/[?&]X-Amz-/i);
+    expect(writeText).not.toHaveBeenCalled();
+
+    pending.resolve();
+    await waitFor(() => expect(shareButton).toBeEnabled());
+  });
+
+  it('копирует постоянную ссылку и показывает успешное состояние без Web Share', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    mockApi();
+    const browser = userEvent.setup();
+    setNavigatorProperty('share', undefined);
+    setNavigatorProperty('clipboard', { writeText });
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Поделиться' }));
+
+    const permalink = new URL(`/knowledge/books/${book.id}`, window.location.origin).toString();
+    expect(writeText).toHaveBeenCalledWith(permalink);
+    expect(await screen.findByText('Ссылка скопирована')).toBeInTheDocument();
+  });
+
+  it('не показывает ошибку и не копирует ссылку после AbortError', async () => {
+    const abortError = Object.assign(new Error('Пользователь закрыл меню'), {
+      name: 'AbortError',
+    });
+    const share = vi.fn().mockRejectedValue(abortError);
+    const writeText = vi.fn();
+    mockApi();
+    const browser = userEvent.setup();
+    setNavigatorProperty('share', share);
+    setNavigatorProperty('clipboard', { writeText });
+    renderPage();
+
+    const shareButton = await screen.findByRole('button', { name: 'Поделиться' });
+    await browser.click(shareButton);
+
+    await waitFor(() => expect(shareButton).toBeEnabled());
+    expect(writeText).not.toHaveBeenCalled();
+    expect(screen.queryByText('Ссылка скопирована')).not.toBeInTheDocument();
+    expect(screen.queryByText(/Не удалось поделиться/)).not.toBeInTheDocument();
+  });
+
+  it('после ошибки Web Share использует Clipboard API', async () => {
+    const share = vi.fn().mockRejectedValue(new Error('Web Share недоступен'));
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    mockApi();
+    const browser = userEvent.setup();
+    setNavigatorProperty('share', share);
+    setNavigatorProperty('clipboard', { writeText });
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Поделиться' }));
+
+    const permalink = new URL(`/knowledge/books/${book.id}`, window.location.origin).toString();
+    expect(share).toHaveBeenCalledOnce();
+    expect(writeText).toHaveBeenCalledWith(permalink);
+    expect(await screen.findByText('Ссылка скопирована')).toBeInTheDocument();
+  });
+
+  it('при двух ошибках показывает постоянную ссылку для ручного копирования', async () => {
+    mockApi();
+    const browser = userEvent.setup();
+    setNavigatorProperty('share', vi.fn().mockRejectedValue(new Error('Share error')));
+    setNavigatorProperty('clipboard', {
+      writeText: vi.fn().mockRejectedValue(new Error('Clipboard error')),
+    });
+    renderPage();
+
+    await browser.click(await screen.findByRole('button', { name: 'Поделиться' }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Не удалось поделиться автоматически');
+    expect(within(alert).getByRole('textbox')).toHaveValue(
+      new URL(`/knowledge/books/${book.id}`, window.location.origin).toString(),
+    );
+  });
+
+  it('не позволяет поделиться приватной книгой и объясняет причину', async () => {
+    const share = vi.fn();
+    const writeText = vi.fn();
+    setNavigatorProperty('share', share);
+    setNavigatorProperty('clipboard', { writeText });
+    mockApi({
+      [detailPath]: () => Promise.resolve(jsonResponse({
+        ...book,
+        visibility: 'private',
+        can_edit: true,
+      })),
+    });
+    renderPage('authenticated');
+
+    const shareButton = await screen.findByRole('button', {
+      name: 'Пока нельзя поделиться',
+    });
+    expect(shareButton).toBeDisabled();
+    const descriptionId = shareButton.getAttribute('aria-describedby');
+    expect(descriptionId).toBeTruthy();
+    expect(document.getElementById(descriptionId))
+      .toHaveTextContent('Приватная книга недоступна другим пользователям.');
+
+    fireEvent.click(shareButton);
+    expect(share).not.toHaveBeenCalled();
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('очищает timeout успешного копирования при размонтировании', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    setNavigatorProperty('share', undefined);
+    setNavigatorProperty('clipboard', { writeText });
+    mockApi();
+    const view = renderPage();
+    const shareButton = await screen.findByRole('button', { name: 'Поделиться' });
+    vi.useFakeTimers();
+
+    fireEvent.click(shareButton);
+    await act(async () => {});
+
+    expect(screen.getByText('Ссылка скопирована')).toBeInTheDocument();
+    expect(vi.getTimerCount()).toBe(1);
+    view.unmount();
+    expect(vi.getTimerCount()).toBe(0);
+    await vi.runAllTimersAsync();
   });
 
   it('возвращает анонимного пользователя после входа на страницу книги', async () => {

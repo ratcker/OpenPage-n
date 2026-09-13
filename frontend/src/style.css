@@ -1,9 +1,9 @@
 /* Палитра */
 :root {
   color-scheme: dark;
-  font-family: Inter, system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
+  text-rendering: auto;
   --background: #0d0b12;
   --surface: #131118;
   --line: #29252f;
@@ -1012,7 +1012,10 @@ a {
 .book-card h3 {
   display: -webkit-box;
   overflow: hidden;
-  line-height: 1.4;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0;
   overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   line-clamp: 2;
@@ -1153,6 +1156,45 @@ a {
   font-size: 0.7rem;
   line-height: 1.4;
   text-transform: none;
+}
+
+.book-share-control {
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.book-share-help,
+.book-share-feedback,
+.book-share-error {
+  margin: 0;
+  font-size: 0.7rem;
+  line-height: 1.4;
+}
+
+.book-share-help {
+  color: var(--muted-text);
+}
+
+.book-share-feedback {
+  color: #c9b6ef;
+}
+
+.book-share-error {
+  display: grid;
+  gap: 7px;
+  color: #e8a9ad;
+}
+
+.book-share-error input {
+  width: 100%;
+  min-width: 0;
+  padding: 7px 8px;
+  border: 1px solid #70404a;
+  border-radius: 6px;
+  color: var(--soft-text);
+  background: #18141e;
+  font: inherit;
 }
 
 .library-page-content,
