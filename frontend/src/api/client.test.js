@@ -45,6 +45,15 @@ describe('authorizedRequest', () => {
     expect(sessionStorageMock.setItem).not.toHaveBeenCalled();
   });
 
+  it('возвращает пустой объект для успешного ответа 204 без JSON', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(null, { status: 204 })));
+    saveSession({ access: 'access-token', user });
+
+    await expect(authorizedRequest('/api/knowledge/library/book-id/', {
+      method: 'DELETE',
+    })).resolves.toEqual({});
+  });
+
   it('объединяет refresh для двух параллельных 401', async () => {
     const refreshResponse = deferred();
     const calls = [];

@@ -1939,12 +1939,21 @@ a {
   height: 58px;
   display: grid;
   place-items: center;
+  overflow: hidden;
   border: 1px solid #3b2d50;
   border-radius: 8px;
   color: #a98ee1;
   background: #18131f;
   font-family: Georgia, serif;
   font-size: 1rem;
+}
+
+.article-card-preview {
+  width: 100%;
+  height: 100%;
+  display: block;
+  object-fit: cover;
+  border-radius: inherit;
 }
 
 .article-card-copy {

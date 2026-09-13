@@ -140,6 +140,12 @@ export function addBookToLibrary(bookId) {
   });
 }
 
+export function removeBookFromLibrary(bookId) {
+  return authorizedRequest(`${KNOWLEDGE_URL}/library/${bookId}/`, {
+    method: 'DELETE',
+  });
+}
+
 export function previewKnowledgeBook(file) {
   const body = new FormData();
   body.append('file', file);

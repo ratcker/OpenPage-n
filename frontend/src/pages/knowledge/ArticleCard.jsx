@@ -1,4 +1,15 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
+
+const markdownImagePattern = /!\[([^\]\r\n]*)\]\(\s*([^\s)]+)(?:\s+(?:"[^"\r\n]*"|'[^'\r\n]*'))?\s*\)/;
+const articleImagePathPattern = /^\/api\/knowledge\/article-images\/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\/$/i;
+
+export function firstArticleImage(body) {
+  if (typeof body !== 'string' || !body) return null;
+  const match = markdownImagePattern.exec(body);
+  if (!match || !articleImagePathPattern.test(match[2])) return null;
+  return { src: match[2], alt: match[1].trim() };
+}
 
 function articleExcerpt(body) {
   const text = body
@@ -20,6 +31,28 @@ function formatArticleDate(value) {
   }).format(new Date(value));
 }
 
+function ArticleCardMark({ article }) {
+  const preview = article.visibility === 'public'
+    ? firstArticleImage(article.body)
+    : null;
+  const [failedSrc, setFailedSrc] = useState('');
+  const showPreview = preview && failedSrc !== preview.src;
+
+  return (
+    <div className="article-card-mark" aria-hidden={showPreview ? undefined : 'true'}>
+      {showPreview ? (
+        <img
+          className="article-card-preview"
+          src={preview.src}
+          alt={preview.alt || `Иллюстрация к статье «${article.title}»`}
+          loading="lazy"
+          onError={() => setFailedSrc(preview.src)}
+        />
+      ) : 'Aa'}
+    </div>
+  );
+}
+
 export default function ArticleCard({ article }) {
   const author = article.author;
   const excerpt = articleExcerpt(article.body || '');
@@ -27,7 +60,7 @@ export default function ArticleCard({ article }) {
 
   return (
     <article className="article-card">
-      <div className="article-card-mark" aria-hidden="true">Aa</div>
+      <ArticleCardMark article={article} />
       <div className="article-card-copy">
         <div className="article-card-meta">
           {author?.id ? (

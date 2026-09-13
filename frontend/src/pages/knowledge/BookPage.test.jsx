@@ -348,9 +348,81 @@ describe('BookPage', () => {
       reading_percentage: '0.00',
     }, 201));
 
-    expect(await screen.findByRole('button', { name: 'В библиотеке' })).toBeDisabled();
+    expect(await screen.findByRole('button', { name: 'Убрать из библиотеки' })).toBeEnabled();
     expect(addHandler).toHaveBeenCalledTimes(1);
     expect(screen.getByText('0.00%')).toBeInTheDocument();
+  });
+
+  it('убирает книгу из библиотеки, сбрасывает прогресс и позволяет добавить снова', async () => {
+    const libraryHandler = vi.fn((options) => {
+      if (options?.method === 'DELETE') {
+        return Promise.resolve(new Response(null, { status: 204 }));
+      }
+      if (options?.method === 'POST') {
+        return Promise.resolve(jsonResponse({
+          id: 11,
+          book: { ...book, is_in_library: true },
+          reading_percentage: '0.00',
+        }, 201));
+      }
+      throw new Error('Неожиданный метод библиотеки');
+    });
+    mockApi({
+      [detailPath]: () => Promise.resolve(jsonResponse({ ...book, is_in_library: true })),
+      [progressPath]: () => Promise.resolve(jsonResponse({
+        reading_location: { type: 'epub', location: 'chapter-8' },
+        reading_percentage: '62.50',
+        updated_at: '2026-09-01T10:00:00Z',
+      })),
+      [libraryPath]: libraryHandler,
+    });
+    const browser = userEvent.setup();
+    renderPage('authenticated');
+
+    expect(await screen.findByText('62.50%')).toBeInTheDocument();
+    await browser.click(screen.getByRole('button', { name: 'Убрать из библиотеки' }));
+    const dialog = screen.getByRole('dialog', { name: 'Убрать из библиотеки?' });
+    expect(dialog).toHaveTextContent(`Книга «${book.title}» останется в каталоге`);
+    expect(dialog).toHaveTextContent('прогресс чтения будет сброшен');
+    await browser.click(within(dialog).getByRole('button', { name: 'Убрать из библиотеки' }));
+
+    expect(await screen.findByRole('button', { name: 'Добавить в библиотеку' })).toBeEnabled();
+    expect(screen.queryByText('62.50%')).not.toBeInTheDocument();
+    expect(libraryHandler).toHaveBeenCalledWith(expect.objectContaining({
+      method: 'DELETE',
+      credentials: 'include',
+      headers: expect.objectContaining({ Authorization: 'Bearer book-token' }),
+    }));
+
+    await browser.click(screen.getByRole('button', { name: 'Добавить в библиотеку' }));
+    expect(await screen.findByRole('button', { name: 'Убрать из библиотеки' })).toBeEnabled();
+    expect(screen.getByText('0.00%')).toBeInTheDocument();
+    expect(libraryHandler).toHaveBeenLastCalledWith(expect.objectContaining({ method: 'POST' }));
+  });
+
+  it('оставляет книгу и прогресс на странице при ошибке удаления из библиотеки', async () => {
+    mockApi({
+      [detailPath]: () => Promise.resolve(jsonResponse({ ...book, is_in_library: true })),
+      [progressPath]: () => Promise.resolve(jsonResponse({
+        reading_location: { type: 'epub', location: 'chapter-3' },
+        reading_percentage: '18.50',
+        updated_at: '2026-09-01T10:00:00Z',
+      })),
+      [libraryPath]: () => Promise.resolve(jsonResponse({ detail: 'Ошибка' }, 500)),
+    });
+    const browser = userEvent.setup();
+    renderPage('authenticated');
+
+    expect(await screen.findByText('18.50%')).toBeInTheDocument();
+    await browser.click(screen.getByRole('button', { name: 'Убрать из библиотеки' }));
+    await browser.click(screen.getByRole('button', { name: 'Убрать из библиотеки' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Не удалось убрать книгу из библиотеки',
+    );
+    expect(screen.getByText('18.50%')).toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Убрать из библиотеки?' }))
+      .toBeInTheDocument();
   });
 
   it('редактирует metadata владельца и сразу обновляет страницу', async () => {

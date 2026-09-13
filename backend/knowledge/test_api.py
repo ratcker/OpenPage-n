@@ -684,6 +684,82 @@ class LibraryAPITests(KnowledgeAPITestCase):
             UserLibraryBook.objects.filter(user=self.user, book=book).exists()
         )
 
+    def test_removing_book_deletes_only_current_users_entry_and_progress(self):
+        book = self.create_model_book()
+        storage_key = book.storage_key
+        own_entry = UserLibraryBook.objects.create(
+            user=self.user,
+            book=book,
+            reading_location={"type": "epub", "location": "epubcfi(/6/12)"},
+            reading_percentage=Decimal("64.25"),
+        )
+        other_entry = UserLibraryBook.objects.create(
+            user=self.other_user,
+            book=book,
+            reading_location={"type": "epub", "location": "epubcfi(/8/4)"},
+            reading_percentage=Decimal("31.50"),
+        )
+        untouched_book = self.create_model_book()
+        untouched_entry = UserLibraryBook.objects.create(
+            user=self.user,
+            book=untouched_book,
+            reading_location={"type": "epub", "location": "epubcfi(/4/2)"},
+            reading_percentage=Decimal("12.00"),
+        )
+        url = reverse("knowledge_library_add", kwargs={"book_uuid": book.id})
+
+        response = self.client.delete(url)
+
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.content, b"")
+        self.assertFalse(UserLibraryBook.objects.filter(id=own_entry.id).exists())
+        self.assertTrue(Book.objects.filter(id=book.id).exists())
+        book.refresh_from_db()
+        self.assertEqual(book.storage_key, storage_key)
+        other_entry.refresh_from_db()
+        self.assertEqual(
+            other_entry.reading_location,
+            {"type": "epub", "location": "epubcfi(/8/4)"},
+        )
+        self.assertEqual(other_entry.reading_percentage, Decimal("31.50"))
+        self.assertTrue(UserLibraryBook.objects.filter(id=untouched_entry.id).exists())
+        self.assertFalse(StorageCleanupJob.objects.exists())
+
+        repeated_response = self.client.delete(url)
+        self.assertEqual(repeated_response.status_code, status.HTTP_404_NOT_FOUND)
+
+    def test_removing_missing_or_another_users_entry_returns_not_found(self):
+        missing_book = self.create_model_book()
+        other_book = self.create_model_book()
+        other_entry = UserLibraryBook.objects.create(
+            user=self.other_user,
+            book=other_book,
+            reading_location={"type": "epub", "location": "epubcfi(/6/2)"},
+            reading_percentage=Decimal("45.00"),
+        )
+
+        for book in (missing_book, other_book):
+            with self.subTest(book=book.id):
+                response = self.client.delete(
+                    reverse("knowledge_library_add", kwargs={"book_uuid": book.id})
+                )
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+
+        other_entry.refresh_from_db()
+        self.assertEqual(other_entry.reading_percentage, Decimal("45.00"))
+
+    def test_anonymous_user_cannot_remove_library_entry(self):
+        book = self.create_model_book()
+        entry = UserLibraryBook.objects.create(user=self.user, book=book)
+        self.client.credentials()
+
+        response = self.client.delete(
+            reverse("knowledge_library_add", kwargs={"book_uuid": book.id})
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        self.assertTrue(UserLibraryBook.objects.filter(id=entry.id).exists())
+
 
 class LibraryProgressAPITests(KnowledgeAPITestCase):
     def progress_url(self, book):

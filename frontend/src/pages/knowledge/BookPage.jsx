@@ -12,6 +12,7 @@ import BookCover from './BookCover.jsx';
 import BookDeleteDialog from './BookDeleteDialog.jsx';
 import BookEditDialog from './BookEditDialog.jsx';
 import BookLibraryAction from './BookLibraryAction.jsx';
+import BookLibraryRemoveDialog from './BookLibraryRemoveDialog.jsx';
 import {
   BookPublicationBadge,
   BookPublicationNotice,
@@ -30,6 +31,7 @@ export default function BookPage() {
   const navigate = useNavigate();
   const { status: authStatus } = useAuth();
   const addPendingRef = useRef(false);
+  const membershipVersionRef = useRef(0);
   const sharePendingRef = useRef(false);
   const shareResetTimerRef = useRef(null);
   const isMountedRef = useRef(true);
@@ -39,6 +41,7 @@ export default function BookPage() {
   const [addError, setAddError] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isRemovingFromLibrary, setIsRemovingFromLibrary] = useState(false);
   const [shareStatus, setShareStatus] = useState('idle');
 
   useEffect(() => {
@@ -55,6 +58,8 @@ export default function BookPage() {
     if (authStatus === 'loading') return undefined;
 
     let isActive = true;
+    const membershipVersion = membershipVersionRef.current + 1;
+    membershipVersionRef.current = membershipVersion;
     setState(initialState);
     setProgress(null);
 
@@ -65,7 +70,9 @@ export default function BookPage() {
         if (authStatus === 'authenticated' && book.is_in_library) {
           try {
             const savedProgress = await getKnowledgeBookProgress(bookId);
-            if (isActive) setProgress(savedProgress.reading_percentage);
+            if (isActive && membershipVersionRef.current === membershipVersion) {
+              setProgress(savedProgress.reading_percentage);
+            }
           } catch {
             // Сведения о книге остаются доступны, даже если прогресс временно недоступен.
           }
@@ -92,6 +99,7 @@ export default function BookPage() {
 
     try {
       const entry = await addBookToLibrary(bookId);
+      membershipVersionRef.current += 1;
       setState((current) => ({
         ...current,
         book: { ...current.book, is_in_library: true },
@@ -103,6 +111,17 @@ export default function BookPage() {
       addPendingRef.current = false;
       setIsAdding(false);
     }
+  }
+
+  function handleRemovedFromLibrary() {
+    membershipVersionRef.current += 1;
+    setState((current) => ({
+      ...current,
+      book: { ...current.book, is_in_library: false },
+    }));
+    setProgress(null);
+    setAddError('');
+    setIsRemovingFromLibrary(false);
   }
 
   async function handleShare(book) {
@@ -220,14 +239,24 @@ export default function BookPage() {
             <Link className="book-read-action" to={`/knowledge/books/${book.id}/read`}>
               Читать
             </Link>
-            <BookLibraryAction
-              book={book}
-              authStatus={authStatus}
-              isAdding={isAdding}
-              error={addError}
-              loginFrom={`/knowledge/books/${book.id}`}
-              onAdd={handleAdd}
-            />
+            {book.is_in_library ? (
+              <button
+                className="book-library-action"
+                type="button"
+                onClick={() => setIsRemovingFromLibrary(true)}
+              >
+                Убрать из библиотеки
+              </button>
+            ) : (
+              <BookLibraryAction
+                book={book}
+                authStatus={authStatus}
+                isAdding={isAdding}
+                error={addError}
+                loginFrom={`/knowledge/books/${book.id}`}
+                onAdd={handleAdd}
+              />
+            )}
             <div className="book-share-control">
               <button
                 className="book-library-action book-share-action"
@@ -286,8 +315,8 @@ export default function BookPage() {
     <SiteLayout>
       <div
         className="knowledge-page book-page"
-        aria-hidden={isEditing || isDeleting ? 'true' : undefined}
-        inert={isEditing || isDeleting}
+        aria-hidden={isEditing || isDeleting || isRemovingFromLibrary ? 'true' : undefined}
+        inert={isEditing || isDeleting || isRemovingFromLibrary}
       >
         <div className="container book-page-content">
           <Link className="public-author-back" to="/knowledge">← База знаний</Link>
@@ -307,6 +336,13 @@ export default function BookPage() {
           book={state.book}
           onClose={() => setIsDeleting(false)}
           onDeleted={() => navigate('/knowledge', { replace: true })}
+        />
+      )}
+      {isRemovingFromLibrary && state.book && (
+        <BookLibraryRemoveDialog
+          book={state.book}
+          onClose={() => setIsRemovingFromLibrary(false)}
+          onRemoved={handleRemovedFromLibrary}
         />
       )}
     </SiteLayout>

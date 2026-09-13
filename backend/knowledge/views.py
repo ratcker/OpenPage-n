@@ -517,7 +517,7 @@ class LibraryListView(GenericAPIView):
         return self.get_paginated_response(serializer.data)
 
 
-class LibraryAddView(GenericAPIView):
+class LibraryBookView(GenericAPIView):
     permission_classes = (IsAuthenticated,)
     serializer_class = UserLibraryBookSerializer
 
@@ -561,6 +561,34 @@ class LibraryAddView(GenericAPIView):
             UserLibraryBookSerializer(entry, context={"request": request}).data,
             status=response_status,
         )
+
+    @extend_schema(
+        operation_id="knowledge_library_remove",
+        summary="Убрать книгу из библиотеки",
+        description=(
+            "Удаляет книгу только из библиотеки текущего пользователя. "
+            "Вместе с библиотечной записью сбрасывается сохранённый прогресс чтения; "
+            "сама книга и записи других пользователей сохраняются."
+        ),
+        tags=[KNOWLEDGE_TAG],
+        request=None,
+        responses={
+            204: OpenApiResponse(description="Книга убрана из библиотеки."),
+            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            404: OpenApiResponse(
+                response=KnowledgeDetailResponseSerializer,
+                description="Книга отсутствует в библиотеке текущего пользователя.",
+            ),
+        },
+    )
+    def delete(self, request, book_uuid):
+        entry = get_object_or_404(
+            UserLibraryBook,
+            user=request.user,
+            book_id=book_uuid,
+        )
+        entry.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class LibraryProgressView(GenericAPIView):

@@ -50,7 +50,10 @@ class DocumentationTests(SimpleTestCase):
                 "get": "knowledge_books_progress_retrieve"
             },
             "/api/knowledge/library/": {"get": "knowledge_library_list"},
-            "/api/knowledge/library/{book_uuid}/": {"post": "knowledge_library_add"},
+            "/api/knowledge/library/{book_uuid}/": {
+                "post": "knowledge_library_add",
+                "delete": "knowledge_library_remove",
+            },
             "/api/knowledge/library/{book_uuid}/progress/": {
                 "patch": "knowledge_library_progress_update"
             },
@@ -113,6 +116,7 @@ class DocumentationTests(SimpleTestCase):
             ("/api/knowledge/books/{book_uuid}/progress/", "get"),
             ("/api/knowledge/library/", "get"),
             ("/api/knowledge/library/{book_uuid}/", "post"),
+            ("/api/knowledge/library/{book_uuid}/", "delete"),
             ("/api/knowledge/library/{book_uuid}/progress/", "patch"),
             ("/api/knowledge/profile/", "get"),
             ("/api/knowledge/profile/", "post"),
@@ -154,6 +158,16 @@ class DocumentationTests(SimpleTestCase):
             schema["components"]["securitySchemes"]["jwtAuth"],
             {"type": "http", "scheme": "bearer", "bearerFormat": "JWT"},
         )
+
+    def test_library_remove_schema_has_no_body_and_documents_responses(self):
+        schema = self.schema()
+        operation = schema["paths"]["/api/knowledge/library/{book_uuid}/"]["delete"]
+
+        self.assertEqual(operation["operationId"], "knowledge_library_remove")
+        self.assertEqual(operation["summary"], "Убрать книгу из библиотеки")
+        self.assertNotIn("requestBody", operation)
+        self.assertEqual(set(operation["responses"]), {"204", "401", "404"})
+        self.assertIn("сбрасывается сохранённый прогресс", operation["description"])
 
     def test_book_schema_exposes_computed_user_permissions(self):
         schema = self.schema()

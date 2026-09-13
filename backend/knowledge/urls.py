@@ -17,7 +17,7 @@ from .views import (
     EpubPreviewView,
     KnowledgeProfileAvatarView,
     KnowledgeProfileView,
-    LibraryAddView,
+    LibraryBookView,
     LibraryListView,
     LibraryProgressView,
     PublicAuthorBooksView,
@@ -75,7 +75,7 @@ urlpatterns = [
     path("library/", LibraryListView.as_view(), name="knowledge_library"),
     path(
         "library/<uuid:book_uuid>/",
-        LibraryAddView.as_view(),
+        LibraryBookView.as_view(),
         name="knowledge_library_add",
     ),
     path(
