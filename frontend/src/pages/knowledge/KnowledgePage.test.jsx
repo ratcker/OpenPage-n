@@ -277,6 +277,8 @@ describe('KnowledgePage', () => {
     expect(screen.getByRole('button', { name: 'Добавить в библиотеку' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Редактировать профиль' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Удалить аватар' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Моя библиотека' }))
+      .toHaveAttribute('href', '/knowledge/library');
     expect(screen.getByRole('link', { name: 'Открыть публичный профиль' }))
       .toHaveAttribute('href', `/knowledge/authors/${profile.id}`);
     expect(screen.getByRole('button', { name: 'Загрузить книгу' })).toBeInTheDocument();
@@ -880,6 +882,8 @@ describe('KnowledgePage', () => {
     expect(screen.getByRole('heading', { name: publicBook.title })).toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Стать автором' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Моя библиотека' }))
+      .toHaveAttribute('href', '/knowledge/library');
     expect(screen.queryByRole('button', { name: 'Загрузить книгу' })).not.toBeInTheDocument();
   });
 

@@ -284,7 +284,7 @@ export default function ReaderPage() {
         isFullscreen={isFullscreen}
         saveStatus={saveStatus}
         onZoomChange={(change) => setZoom((value) => (
-          Number(clamp(value + change, 0.75, 1.8).toFixed(2))
+          Number(clamp(value + change, 0.35, 1.8).toFixed(2))
         ))}
         onFontSizeChange={(change) => setFontSize((value) => (
           clamp(value + change, 80, 140)

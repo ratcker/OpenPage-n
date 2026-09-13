@@ -42,7 +42,7 @@ export default function ReaderToolbar({
             <button
               type="button"
               aria-label="Уменьшить масштаб"
-              disabled={zoom <= 0.75}
+              disabled={zoom <= 0.35}
               onClick={() => onZoomChange(-0.15)}
             >
               −

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 import useAuth from '../../auth/useAuth.js';
 import SiteLayout from '../../components/SiteLayout.jsx';
@@ -35,9 +35,6 @@ export default function ProfilePage() {
           </dl>
 
           <div className="profile-actions">
-            <Link className="profile-library-link" to="/knowledge/library">
-              Моя библиотека
-            </Link>
             <button
               className="primary-button profile-logout"
               type="button"

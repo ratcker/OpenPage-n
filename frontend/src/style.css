@@ -439,24 +439,6 @@ a {
   margin-top: 24px;
 }
 
-.profile-library-link {
-  min-height: 42px;
-  display: inline-grid;
-  place-items: center;
-  padding: 0 18px;
-  border: 1px solid #68499b;
-  border-radius: 8px;
-  color: #eee7fb;
-  background: #2a2037;
-  font-size: 0.82rem;
-  font-weight: 650;
-}
-
-.profile-library-link:hover {
-  border-color: #8f68ca;
-  background: #332542;
-}
-
 .profile-logout {
   margin-top: 0;
   cursor: pointer;
@@ -2517,6 +2499,7 @@ a {
 .reader-back,
 .reader-fullscreen,
 .reader-format-controls button,
+.pdf-page-navigation button,
 .reader-error-state button,
 .reader-error-state a {
   min-height: 38px;
@@ -2540,6 +2523,7 @@ a {
 .reader-back:hover,
 .reader-fullscreen:hover,
 .reader-format-controls button:hover:not(:disabled),
+.pdf-page-navigation button:hover:not(:disabled),
 .reader-error-state button:hover,
 .reader-error-state a:hover {
   border-color: #7050a5;
@@ -2669,6 +2653,19 @@ a {
   overflow: hidden;
 }
 
+.pdf-reader {
+  position: relative;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+.pdf-reader-viewport {
+  position: relative;
+  min-height: 0;
+  overflow: hidden;
+}
+
 .reader-renderer-loading,
 .reader-refreshing {
   position: absolute;
@@ -2695,21 +2692,135 @@ a {
   opacity: 1;
 }
 
+.pdf-reader-document {
+  position: relative;
+  width: fit-content;
+  min-width: 0;
+  margin: 0 auto;
+}
+
 .pdf-page {
   width: fit-content;
-  margin: 0 auto 24px;
+  margin: 0 auto;
   overflow: hidden;
   border-radius: 3px;
   background: #fff;
   box-shadow: 0 12px 36px rgba(0, 0, 0, 0.32);
 }
 
-.pdf-page:last-child {
-  margin-bottom: 34px;
-}
-
 .pdf-page .react-pdf__Page__canvas {
   display: block;
+}
+
+.pdf-page-preload {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  contain: strict;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.pdf-page-navigation {
+  min-width: 0;
+  display: grid;
+  justify-content: center;
+  justify-items: center;
+  gap: 7px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--line);
+  background: rgba(19, 17, 24, 0.98);
+}
+
+.pdf-page-scrubber {
+  width: min(760px, 100%);
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(2ch, auto) minmax(0, 1fr) minmax(2ch, auto);
+  align-items: center;
+  gap: 9px;
+  color: var(--muted-text);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.pdf-page-scrubber input {
+  width: 100%;
+  min-width: 0;
+  min-height: 28px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+  touch-action: pan-y;
+}
+
+.pdf-page-scrubber input:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.pdf-page-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.pdf-page-navigation button {
+  width: 42px;
+  min-height: 40px;
+  padding: 0;
+}
+
+.pdf-page-navigation button:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.pdf-page-count {
+  min-width: 11ch;
+  color: var(--soft-text);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.pdf-page-input {
+  width: clamp(54px, 8vw, 72px);
+  min-height: 40px;
+  padding: 0 8px;
+  border: 1px solid #3d3746;
+  border-radius: 8px;
+  color: var(--text);
+  background: #100e15;
+  font: inherit;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.pdf-page-input:disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.pdf-preload-warning {
+  position: absolute;
+  z-index: 3;
+  right: 16px;
+  bottom: 104px;
+  max-width: min(360px, calc(100% - 32px));
+  margin: 0;
+  padding: 7px 10px;
+  border: 1px solid #59383f;
+  border-radius: 6px;
+  color: #efb7bb;
+  background: #211419;
+  font-size: 0.68rem;
+  line-height: 1.4;
 }
 
 .epub-reader {
@@ -3189,6 +3300,20 @@ a {
 
   .pdf-reader-scroll {
     padding: 18px 12px;
+  }
+
+  .pdf-page-navigation {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
+  .pdf-page-scrubber,
+  .pdf-page-controls {
+    gap: 6px;
+  }
+
+  .pdf-page-count {
+    min-width: 9ch;
   }
 
   .epub-reader {

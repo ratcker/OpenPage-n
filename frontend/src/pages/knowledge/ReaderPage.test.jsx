@@ -331,6 +331,22 @@ describe('ReaderPage', () => {
     );
   });
 
+  it('уменьшает PDF scale до 35%', async () => {
+    mockReaderApi();
+    const browser = userEvent.setup();
+    renderReader();
+    await screen.findByText('PDF scale: 1');
+    const decreaseZoom = screen.getByRole('button', { name: 'Уменьшить масштаб' });
+
+    for (let step = 0; step < 5; step += 1) {
+      await browser.click(decreaseZoom);
+    }
+
+    expect(screen.getByText('PDF scale: 0.35')).toBeInTheDocument();
+    expect(screen.getByText('35%')).toBeInTheDocument();
+    expect(decreaseZoom).toBeDisabled();
+  });
+
   it('восстанавливает EPUB location, меняет font size и сохраняет CFI', async () => {
     const savedCfi = 'epubcfi(/6/4!/4/2)';
     const progressHandler = vi.fn(() => Promise.resolve(jsonResponse({ ok: true })));

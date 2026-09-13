@@ -73,13 +73,21 @@ export default function AuthorProfile({
           <h2 id="reader-profile-title">Профиль автора не создан</h2>
           <p>Создайте его, чтобы публиковать собственные материалы.</p>
         </div>
-        <button
-          className="author-profile-button author-profile-button-primary"
-          type="button"
-          onClick={onCreate}
-        >
-          Стать автором
-        </button>
+        <div className="author-profile-actions">
+          <button
+            className="author-profile-button author-profile-button-primary"
+            type="button"
+            onClick={onCreate}
+          >
+            Стать автором
+          </button>
+          <Link
+            className="author-profile-button author-profile-link"
+            to="/knowledge/library"
+          >
+            Моя библиотека
+          </Link>
+        </div>
       </section>
     );
   }
@@ -108,6 +116,12 @@ export default function AuthorProfile({
         {profile.bio && <p>{profile.bio}</p>}
       </div>
       <div className="author-profile-actions">
+        <Link
+          className="author-profile-button author-profile-link"
+          to="/knowledge/library"
+        >
+          Моя библиотека
+        </Link>
         <button className="author-profile-button" type="button" onClick={onEdit}>
           Редактировать профиль
         </button>

@@ -87,8 +87,8 @@ describe('авторизация и маршруты', () => {
     expect(await screen.findByRole('heading', { name: 'Профиль' })).toBeInTheDocument();
     expect(screen.getByText(user.name)).toBeInTheDocument();
     expect(screen.getByText(user.email)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Моя библиотека' }))
-      .toHaveAttribute('href', '/knowledge/library');
+    expect(screen.queryByRole('link', { name: 'Моя библиотека' }))
+      .not.toBeInTheDocument();
     expect(loginHandler).toHaveBeenCalledWith(expect.objectContaining({
       method: 'POST',
       credentials: 'include',
