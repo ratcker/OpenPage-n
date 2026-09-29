@@ -107,7 +107,7 @@ describe('авторизация и маршруты', () => {
     await screen.findByRole('heading', { name: 'Войти' });
     await fillLoginForm(browser);
 
-    expect(await screen.findByRole('heading', { name: 'Сервисы рядом' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Расположите свой проект на Опенпейч' })).toBeInTheDocument();
   });
 
   it('оставляет ошибку backend видимой и не создаёт сессию', async () => {
@@ -155,7 +155,7 @@ describe('авторизация и маршруты', () => {
   it('перенаправляет публичный корневой маршрут на /hub без старого интерфейса', async () => {
     renderApp('/', false);
 
-    expect(await screen.findByRole('heading', { name: 'Сервисы рядом' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Расположите свой проект на Опенпейч' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Перейти в хаб' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Войти в аккаунт' })).not.toBeInTheDocument();
   });
@@ -192,16 +192,14 @@ describe('авторизация и маршруты', () => {
     expect(screen.queryByRole('link', { name: 'Войти в аккаунт' })).not.toBeInTheDocument();
   });
 
-  it('оставляет /hub публичным и сохраняет ссылки Header', () => {
+  it('оставляет /hub публичным', () => {
     renderApp('/hub', false);
 
-    expect(screen.getByRole('heading', { name: 'Сервисы рядом' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Расположите свой проект на Опенпейч' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'На лендинг' })).toHaveAttribute('href', '/');
     expect(screen.getByRole('link', { name: 'Хаб' })).toHaveAttribute('href', '/hub');
-    expect(screen.getByRole('link', { name: 'Сервисы' })).toHaveAttribute(
-      'href',
-      '/hub#services',
-    );
+    expect(screen.getByRole('button', { name: 'Разместить проект' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Смотреть проекты' })).toBeEnabled();
   });
 
   it('открывает Базу знаний из каталога, сохраняя карточку будущих сервисов', async () => {
@@ -379,7 +377,7 @@ describe('авторизация и маршруты', () => {
     await browser.type(screen.getByLabelText('Код подтверждения'), '123456');
     await browser.click(screen.getByRole('button', { name: 'Подтвердить' }));
 
-    expect(await screen.findByRole('heading', { name: 'Сервисы рядом' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Расположите свой проект на Опенпейч' })).toBeInTheDocument();
     expect(verifyHandler).toHaveBeenCalledWith(expect.objectContaining({
       body: JSON.stringify({ email: user.email, code: '123456' }),
     }));

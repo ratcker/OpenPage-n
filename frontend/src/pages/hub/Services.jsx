@@ -5,7 +5,7 @@ import knowledgeArtwork from '../../assets/knowledge-artwork.svg';
 // Каталог
 export default function Services() {
   return (
-    <section className="services" id="services" aria-labelledby="services-title">
+    <section className="services" aria-labelledby="services-title">
       <div className="container">
         <div className="section-heading">
           <div>

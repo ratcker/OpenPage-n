@@ -14,7 +14,6 @@ export default function Header() {
         <div className="header-actions">
           <nav className="nav" aria-label="Навигация">
             <Link to="/hub">Хаб</Link>
-            <Link to="/hub#services">Сервисы</Link>
           </nav>
 
           <Link className="profile" to="/profile">
