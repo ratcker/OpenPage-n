@@ -1,0 +1,36 @@
+name: Mirror to GitFlic
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * 1"
+permissions:
+  contents: read
+concurrency:
+  group: gitflic-mirror
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: Clone GitHub repository
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git -c http.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)" \
+            clone --mirror "https://github.com/${GH_REPOSITORY}.git" repo.git
+      
+      - name: Push mirror to GitFlic
+        env:
+          GITFLIC_REPO_URL: ${{ vars.GITFLIC_REPO_URL }}
+          GITFLIC_USERNAME: ${{ vars.GITFLIC_USERNAME }}
+          GITFLIC_TOKEN: ${{ secrets.GITFLIC_TOKEN }}
+        run: |
+          cd repo.git
+          git remote add gitflic "$GITFLIC_REPO_URL"
+          AUTH=$(printf '%s:%s' "$GITFLIC_USERNAME" "$GITFLIC_TOKEN" | base64 -w0)
+          git -c http.https://gitflic.mtuci.ru/.proactiveAuth=none \
+            -c "http.https://gitflic.mtuci.ru/.extraHeader=Authorization: Basic $AUTH" \
+            push --prune gitflic '+refs/heads/*:refs/heads/*' '+refs/tags/*:refs/tags/*'
