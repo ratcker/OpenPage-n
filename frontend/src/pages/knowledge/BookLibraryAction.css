@@ -1,0 +1,43 @@
+
+
+.book-library-control {
+  margin-top: 0;
+}
+
+.book-library-action {
+  width: 100%;
+  min-height: 36px;
+  display: grid;
+  place-items: center;
+  padding: 8px 10px;
+  border: 1px solid #3d3449;
+  border-radius: 7px;
+  color: #c9b6ef;
+  background: #18141e;
+  cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-align: center;
+}
+
+.book-library-action:hover:not(:disabled) {
+  border-color: #7050a5;
+  color: var(--text);
+}
+
+.book-library-action:disabled {
+  color: #746d7b;
+  cursor: default;
+}
+
+.book-library-login {
+  margin-top: 0;
+}
+
+.book-library-error {
+  margin: 8px 0 0;
+  color: #e8a9ad;
+  font-size: 0.7rem;
+  line-height: 1.4;
+  text-transform: none;
+}

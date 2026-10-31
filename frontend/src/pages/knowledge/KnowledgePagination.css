@@ -1,0 +1,32 @@
+.knowledge-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 28px;
+}
+
+.knowledge-pagination button {
+  min-width: 92px;
+  min-height: 38px;
+  border: 1px solid #3d3449;
+  border-radius: 8px;
+  color: var(--soft-text);
+  background: #18141e;
+  cursor: pointer;
+}
+
+.knowledge-pagination button:hover:not(:disabled) {
+  border-color: #7050a5;
+  color: var(--text);
+}
+
+.knowledge-pagination button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.knowledge-pagination span {
+  color: var(--muted-text);
+  font-size: 0.76rem;
+}

@@ -1,0 +1,13 @@
+/* Статья */
+.article-page-content,
+.article-editor-content {
+  padding-top: 42px;
+  padding-bottom: 112px;
+}
+
+.article-reading-shell,
+.article-page-state,
+.article-editor {
+  width: min(100%, 820px);
+  margin-inline: auto;
+}
