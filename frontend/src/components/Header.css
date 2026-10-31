@@ -1,0 +1,75 @@
+/* Шапка */
+.header {
+  border-bottom: 1px solid var(--line);
+  background: rgba(13, 11, 18, 0.94);
+}
+
+.header-inner,
+.header-actions,
+.nav,
+.brand,
+.profile {
+  display: flex;
+  align-items: center;
+}
+
+.header-inner {
+  min-height: 72px;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.brand {
+  gap: 10px;
+  white-space: nowrap;
+  font-size: 1.05rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.brand img {
+  width: 25px;
+  height: 21px;
+}
+
+.header-actions {
+  gap: 28px;
+}
+
+.nav {
+  gap: 24px;
+}
+
+.nav a {
+  padding: 9px 0;
+  color: var(--muted-text);
+  font-size: 0.875rem;
+}
+
+.nav a:hover {
+  color: var(--text);
+}
+
+.profile {
+  min-height: 38px;
+  gap: 8px;
+  padding: 4px 12px 4px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--soft-text);
+  background: var(--surface);
+  font-size: 0.8125rem;
+}
+
+.profile:hover {
+  border-color: #4b4358;
+  color: var(--text);
+}
+
+.profile svg {
+  width: 20px;
+  fill: none;
+  stroke: #b9a1eb;
+  stroke-linecap: round;
+  stroke-width: 1.4;
+}
