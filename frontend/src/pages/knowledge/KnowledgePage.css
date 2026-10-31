@@ -1,0 +1,234 @@
+/* База знаний */
+.knowledge-page {
+  flex: 1;
+  background: #0f0d14;
+}
+
+.knowledge-header {
+  padding: 32px 0 40px;
+  border-bottom: 1px solid var(--line);
+  background: var(--background);
+}
+
+.knowledge-header-content {
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.knowledge-title {
+  margin-top: 26px;
+  text-align: center;
+}
+
+.knowledge-title .eyebrow {
+  justify-content: center;
+  margin-bottom: 14px;
+}
+
+.knowledge-header h1 {
+  margin: 0;
+  font-size: 2.75rem;
+  font-weight: 640;
+  line-height: 1.05;
+}
+
+.knowledge-intro {
+  max-width: 540px;
+  margin: 12px 0 0;
+  color: var(--soft-text);
+  font-size: 1rem;
+  line-height: 1.65;
+}
+
+.knowledge-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.18);
+}
+
+.knowledge-tabs button {
+  min-width: 90px;
+  padding: 9px 18px;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--muted-text);
+  background: transparent;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+
+.knowledge-tabs button:hover,
+.knowledge-tabs button[aria-selected="true"] {
+  color: var(--text);
+}
+
+.knowledge-tabs button[aria-selected="true"] {
+  border-color: #68499b;
+  background: #2a2037;
+}
+
+.knowledge-content {
+  padding-top: 40px;
+  padding-bottom: 112px;
+}
+
+.knowledge-library-layout {
+  display: grid;
+  grid-template-columns: 250px minmax(0, 1fr);
+  align-items: start;
+  gap: 32px;
+}.knowledge-books-column {
+  min-width: 0;
+  display: grid;
+  gap: 64px;
+}.knowledge-catalog {
+  margin-top: 0;
+}
+
+.knowledge-section-heading {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-items: end;
+  gap: 32px;
+  margin-bottom: 26px;
+}
+
+.knowledge-section-heading h2 {
+  margin: 0;
+  font-size: 2rem;
+  font-weight: 620;
+}
+
+.knowledge-section-heading > p {
+  margin: 0 0 2px;
+  color: var(--muted-text);
+  font-size: 0.82rem;
+}
+
+.knowledge-message {
+  min-height: 210px;
+  display: grid;
+  align-content: center;
+  justify-items: start;
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.knowledge-message h3 {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.knowledge-message p {
+  max-width: 440px;
+  margin: 9px 0 0;
+  color: var(--muted-text);
+  font-size: 0.8rem;
+  line-height: 1.5;
+}.articles-catalog {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.articles-layout {
+  max-width: 900px;
+  margin: 0 auto;
+}
+
+.articles-layout-with-personal {
+  max-width: none;
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  align-items: start;
+  gap: 32px;
+}
+
+.articles-layout .articles-catalog {
+  width: 100%;
+}
+
+.my-articles .article-card {
+  min-height: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 14px 15px;
+}
+
+.my-articles .knowledge-section-heading {
+  grid-template-columns: 1fr;
+  align-items: start;
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.my-articles .knowledge-section-heading h2 {
+  font-size: 1.65rem;
+}
+
+.my-articles .article-create-link {
+  min-height: 36px;
+  justify-content: center;
+  padding-inline: 12px;
+}
+
+.my-articles .article-card-mark,
+.my-articles .article-card-meta a,
+.my-articles .article-card-excerpt {
+  display: none;
+}
+
+.my-articles .article-card-meta {
+  margin-bottom: 7px;
+}
+
+.my-articles .article-card-meta time::before {
+  display: none;
+}
+
+.my-articles .article-card h3 {
+  font-size: 0.88rem;
+  line-height: 1.4;
+}
+
+.my-articles .article-card-open {
+  width: 30px;
+  height: 30px;
+}
+
+@media (min-width: 1201px) {
+  .articles-layout-with-personal {
+    width: calc(100% + 64px);
+    margin-left: -64px;
+  }
+}
+
+.article-create-link {
+  min-height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 15px;
+  border: 1px solid #68499b;
+  border-radius: 8px;
+  color: #e9e0fb;
+  background: #2a2037;
+  font-size: 0.78rem;
+  font-weight: 650;
+}
+
+.article-create-link:hover {
+  border-color: #8f68ca;
+  background: #332542;
+}.article-grid {
+  display: grid;
+  gap: 12px;
+}

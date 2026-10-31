@@ -1,0 +1,23 @@
+/* Подвал */
+.footer {
+  border-top: 1px solid var(--line);
+}
+
+.footer-inner {
+  min-height: 96px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 24px;
+}
+
+.footer p,
+.footer-domain {
+  margin: 0;
+  color: var(--muted-text);
+  font-size: 0.72rem;
+}
+
+.footer-domain {
+  justify-self: end;
+}

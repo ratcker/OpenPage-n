@@ -1,0 +1,17 @@
+
+
+.library-page-heading {
+  margin-bottom: 48px;
+}
+
+.library-page-heading h1 {
+  margin: 0;
+  font-size: 2.55rem;
+  font-weight: 620;
+}
+
+.library-page-heading > p:last-child {
+  margin: 12px 0 0;
+  color: var(--muted-text);
+  line-height: 1.6;
+}

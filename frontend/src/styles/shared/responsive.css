@@ -1,0 +1,422 @@
+/* Планшеты */
+@media (max-width: 900px) {
+  .knowledge-library-layout {
+    grid-template-columns: 230px minmax(0, 1fr);
+    gap: 24px;
+  }
+
+  .book-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .container {
+    width: min(calc(100% - 40px), var(--content-width));
+  }
+
+  .hero h1 {
+    font-size: 3.25rem;
+    white-space: normal;
+  }
+
+  .section-heading {
+    grid-template-columns: 1fr;
+    gap: 14px;
+  }
+
+  .service-card {
+    grid-template-columns: 220px minmax(0, 1fr);
+    gap: 24px;
+    padding: 18px;
+  }
+
+  .knowledge-library-layout {
+    grid-template-columns: 1fr;
+    gap: 46px;
+  }
+
+  .book-detail {
+    grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  .public-author-content {
+    padding-top: 30px;
+    padding-bottom: 80px;
+  }
+
+  .public-author-hero {
+    grid-template-columns: 1fr;
+    margin-bottom: 42px;
+    padding: 24px;
+  }
+
+  .coming-soon {
+    grid-template-columns: 52px 1fr;
+    padding: 30px;
+  }
+
+  .coming-soon-icon {
+    width: 52px;
+    height: 52px;
+    padding: 14px;
+  }
+
+  .status {
+    grid-column: 2;
+    width: fit-content;
+  }
+
+  .knowledge-section-heading {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .reader-toolbar {
+    grid-template-columns: 1fr;
+    gap: 10px;
+    padding: 11px 16px;
+  }
+
+  .reader-toolbar-actions {
+    justify-content: space-between;
+  }
+
+  .reader-save-status {
+    right: 16px;
+  }
+}
+
+/* Телефоны */
+@media (max-width: 560px) {
+  .container {
+    width: min(calc(100% - 32px), var(--content-width));
+  }
+
+  .header-inner {
+    min-height: 64px;
+  }
+
+  .nav {
+    display: none;
+  }
+
+  .profile {
+    width: 36px;
+    min-height: 36px;
+    justify-content: center;
+    padding: 0;
+  }
+
+  .profile span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+  }
+
+  .profile-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hero-content {
+    min-height: 0;
+    padding-block: 64px 70px;
+  }
+
+  .hero h1 {
+    font-size: 2.5rem;
+  }
+
+  .login {
+    place-items: start center;
+    padding: 56px 16px;
+  }
+
+  .login h1 {
+    font-size: 2rem;
+  }
+
+  .hero-text {
+    margin-top: 20px;
+    font-size: 1rem;
+  }
+
+  .hero-actions {
+    width: 100%;
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 28px;
+  }
+
+  .hero .primary-button,
+  .hero-secondary-action {
+    width: 100%;
+    justify-content: center;
+  }
+
+  .services {
+    padding: 68px 0 80px;
+  }
+
+  .section-heading h2 {
+    font-size: 2rem;
+  }
+
+  .service-card {
+    min-height: 0;
+    grid-template-columns: 1fr;
+    gap: 22px;
+    padding: 16px 16px 24px;
+  }
+
+  .service-card h3 {
+    font-size: 1.65rem;
+  }
+
+  .service-card-content {
+    padding-inline: 6px;
+  }
+
+  .coming-soon {
+    min-height: 280px;
+    grid-template-columns: 1fr;
+    align-content: center;
+    gap: 22px;
+    padding: 28px 24px;
+  }
+
+  .status {
+    grid-column: auto;
+  }
+
+  .knowledge-header {
+    padding: 24px 0 30px;
+  }
+
+  .knowledge-header h1 {
+    font-size: 2.25rem;
+  }
+
+  .knowledge-title {
+    margin-top: 22px;
+  }
+
+  .knowledge-intro {
+    font-size: 0.9rem;
+  }
+
+  .knowledge-content {
+    padding-top: 28px;
+    padding-bottom: 80px;
+  }
+
+  .author-profile {
+    padding: 22px;
+  }
+
+  .knowledge-catalog {
+    margin-top: 0;
+  }
+
+  .knowledge-section-heading h2 {
+    font-size: 1.7rem;
+  }
+
+  .book-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .book-card {
+    display: grid;
+    grid-template-columns: 92px 1fr;
+    align-items: center;
+    gap: 18px;
+  }
+
+  .book-card-copy {
+    align-self: stretch;
+  }
+
+  .book-cover {
+    width: 92px;
+    min-height: 116px;
+    padding: 14px;
+  }
+
+  .book-card > div:last-child > p {
+    margin-top: 0;
+  }
+
+  .book-card-navigation {
+    grid-template-columns: 1fr;
+  }
+
+  .library-page-content,
+  .book-page-content {
+    padding-top: 28px;
+    padding-bottom: 80px;
+  }
+
+  .book-detail {
+    grid-template-columns: 1fr;
+  }
+
+  .book-detail-cover {
+    width: min(72vw, 280px);
+  }
+
+  .book-detail-metadata,
+  .book-detail-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .book-owner-actions {
+    display: grid;
+  }
+
+  .articles-catalog {
+    margin-top: 8px;
+  }
+
+  .articles-layout-with-personal {
+    grid-template-columns: 1fr;
+  }
+
+  .article-card {
+    grid-template-columns: 52px minmax(0, 1fr);
+    gap: 16px;
+    padding: 20px;
+  }
+
+  .article-card-mark {
+    width: 50px;
+    height: 50px;
+  }
+
+  .article-card-open {
+    display: none;
+  }
+
+  .article-reading-shell,
+  .article-editor {
+    padding: 26px 22px 38px;
+  }
+
+  .article-editor-heading {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .article-editor-heading > label {
+    max-width: 180px;
+  }
+
+  .article-owner-actions,
+  .article-editor-actions {
+    display: grid;
+  }
+
+  .book-upload-backdrop {
+    align-items: end;
+    padding: 12px;
+  }
+
+  .book-upload-dialog {
+    max-height: calc(100dvh - 24px);
+    padding: 24px;
+  }
+
+  .book-upload-options,
+  .book-upload-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .book-upload-actions {
+    display: grid;
+  }
+
+  .reader-toolbar-book {
+    gap: 10px;
+  }
+
+  .reader-back {
+    width: 38px;
+    padding: 0;
+    font-size: 0;
+  }
+
+  .reader-back span {
+    font-size: 1rem;
+  }
+
+  .reader-toolbar-book p {
+    display: none;
+  }
+
+  .reader-toolbar-actions {
+    gap: 6px;
+  }
+
+  .reader-toolbar .book-publication-notice summary {
+    width: 38px;
+    padding: 0;
+    justify-content: center;
+    font-size: 0;
+  }
+
+  .reader-toolbar .book-publication-notice summary::before {
+    content: "i";
+    font-size: 0.78rem;
+    font-weight: 750;
+  }
+
+  .reader-progress {
+    min-width: 42px;
+  }
+
+  .reader-format-controls span {
+    display: none;
+  }
+
+  .reader-fullscreen {
+    padding: 0 10px;
+    font-size: 0.68rem;
+  }
+
+  .pdf-reader-scroll {
+    padding: 18px 12px;
+  }
+
+  .pdf-page-navigation {
+    gap: 6px;
+    padding-inline: 8px;
+  }
+
+  .pdf-page-scrubber,
+  .pdf-page-controls {
+    gap: 6px;
+  }
+
+  .pdf-page-count {
+    min-width: 9ch;
+  }
+
+  .epub-reader {
+    padding: 12px;
+  }
+
+  .footer-inner {
+    min-height: 120px;
+    grid-template-columns: 1fr auto;
+  }
+
+  .footer p {
+    display: none;
+  }
+}
+

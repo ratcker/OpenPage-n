@@ -1,0 +1,9 @@
+/* Сессия и профиль */
+.session-loading {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: grid;
+  place-items: center;
+  color: var(--muted-text);
+  font-size: 0.85rem;
+}

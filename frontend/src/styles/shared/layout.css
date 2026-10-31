@@ -1,0 +1,33 @@
+/* Каркас */
+.page {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+}
+
+.page > main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.container {
+  width: min(calc(100% - 64px), var(--content-width));
+  margin-inline: auto;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 20;
+  top: 12px;
+  left: 12px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--accent-dark);
+  transform: translateY(-160%);
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
