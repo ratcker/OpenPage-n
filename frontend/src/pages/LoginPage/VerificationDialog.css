@@ -1,0 +1,34 @@
+/* Окно подтверждения */
+.verification-backdrop {
+  position: fixed;
+  z-index: 30;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(8, 7, 11, 0.78);
+}
+
+.verification-dialog {
+  width: min(100%, 380px);
+  padding: 30px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+}
+
+.verification-dialog > h2,
+.verification-dialog > p {
+  margin: 0;
+}
+
+.verification-dialog > p {
+  margin-top: 12px;
+  color: var(--muted-text);
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+.verification-form {
+  margin-top: 24px;
+}

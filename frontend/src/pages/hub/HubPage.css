@@ -1,0 +1,7 @@
+/* Лендинг */
+.landing {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+}
