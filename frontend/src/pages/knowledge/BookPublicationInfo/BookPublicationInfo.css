@@ -1,0 +1,66 @@
+.book-publication-notice {
+  position: relative;
+}
+
+.book-publication-notice summary {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 12px;
+  border: 1px solid #3d3746;
+  border-radius: 8px;
+  color: var(--soft-text);
+  background: #18151d;
+  cursor: pointer;
+  font-size: 0.76rem;
+  font-weight: 600;
+  list-style: none;
+}
+
+.book-publication-notice summary::-webkit-details-marker {
+  display: none;
+}
+
+.book-publication-notice[open] summary {
+  border-color: #7050a5;
+  color: var(--text);
+}
+
+.book-publication-notice > div {
+  position: absolute;
+  z-index: 8;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(340px, calc(100vw - 32px));
+  padding: 16px;
+  border: 1px solid #49385f;
+  border-radius: 8px;
+  color: var(--soft-text);
+  background: #18141e;
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.42);
+  font-size: 0.76rem;
+  line-height: 1.5;
+}
+
+.book-publication-notice p {
+  margin: 7px 0 0;
+}
+
+.book-publication-notice .book-publication-disclaimer {
+  padding-top: 9px;
+  border-top: 1px solid var(--line);
+  color: var(--muted-text);
+}
+
+.book-publication-badge {
+  width: fit-content;
+  display: inline-flex;
+  margin-top: 9px;
+  padding: 4px 7px;
+  border: 1px solid #594178;
+  border-radius: 999px;
+  color: #d4c2f4;
+  background: #241b31;
+  font-size: 0.66rem;
+  font-weight: 650;
+}

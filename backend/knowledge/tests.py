@@ -3,6 +3,7 @@ from decimal import Decimal
 from io import BytesIO
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
+from urllib.parse import urlsplit
 
 from botocore.exceptions import ClientError
 from django.core.exceptions import ValidationError
@@ -191,7 +192,8 @@ class LocalKnowledgeStorageTests(SimpleTestCase):
 
             url = storage.get_presigned_url(key, expires_in=300)
 
-        self.assertEqual(url, f"/media/knowledge/{key}")
+        self.assertEqual(urlsplit(url).path, f"/api/knowledge/files/{key}")
+        self.assertIn("token=", urlsplit(url).query)
 
 
 class S3KnowledgeStorageTests(SimpleTestCase):

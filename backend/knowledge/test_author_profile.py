@@ -152,10 +152,9 @@ class KnowledgeProfileCreateAPITests(AuthorProfileAPITestCase):
             rf"^profiles/{profile.public_id}/avatars/[0-9a-f-]+\.png$",
         )
         self.assertTrue(LocalKnowledgeStorage().exists(profile.avatar))
-        self.assertEqual(
-            response.data["avatar_url"],
-            f"/media/knowledge/{profile.avatar}",
-        )
+        avatar = self.client.get(response.data["avatar_url"])
+        self.assertEqual(avatar.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(avatar.streaming_content), PNG)
         self.assertNotIn("avatar", response.data)
         self.assertNotIn(profile.avatar, response.data.values())
 
@@ -432,10 +431,9 @@ class PublicAuthorAPITests(AuthorProfileAPITestCase):
             {"id", "display_name", "bio", "avatar_url"},
         )
         self.assertEqual(response.data["id"], str(self.profile.public_id))
-        self.assertEqual(
-            response.data["avatar_url"],
-            f"/media/knowledge/{key}",
-        )
+        avatar = self.client.get(response.data["avatar_url"])
+        self.assertEqual(avatar.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(avatar.streaming_content), PNG)
         for private_field in ("user", "email", "avatar", "public_id"):
             self.assertNotIn(private_field, response.data)
 

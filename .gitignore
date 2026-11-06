@@ -23,6 +23,7 @@ htmlcov/
 backend/db.sqlite3
 backend/*.log
 backend/media/
+/data/
 backend/staticfiles/
 frontend/coverage/
 /notes/*

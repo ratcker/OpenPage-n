@@ -16,7 +16,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import App from './App.jsx';
 import { authorizedRequest, clearSession } from './api/client.js';
-import AuthProvider from './auth/AuthProvider.jsx';
+import AuthProvider from './auth/AuthProvider/AuthProvider.jsx';
 import LandingPage from './pages/LandingPage.jsx';
 import RootPage from './pages/RootPage.jsx';
 import {
@@ -25,7 +25,7 @@ import {
   mockUser as user,
 } from './test/testData.js';
 
-vi.mock('./pages/knowledge/ReaderPage.jsx', () => ({
+vi.mock('./pages/knowledge/ReaderPage/ReaderPage.jsx', () => ({
   default: () => <main><h1>Публичная читалка</h1></main>,
 }));
 

@@ -218,7 +218,9 @@ class BookMetadataUploadAPITests(CatalogV2APITestCase):
         self.assertNotIn("storage_key", response.data)
         with LocalKnowledgeStorage().open(book.cover_key) as stored:
             self.assertEqual(stored.read(), JPEG)
-        self.assertTrue(response.data["cover_url"].endswith(book.cover_key))
+        cover = self.client.get(response.data["cover_url"])
+        self.assertEqual(cover.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(cover.streaming_content), JPEG)
 
         catalog = self.client.get(self.url)
         serialized = catalog.data["results"][0]

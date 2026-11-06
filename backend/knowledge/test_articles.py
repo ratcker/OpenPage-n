@@ -508,7 +508,9 @@ class ArticleImageDeliveryAPITests(ArticleAPITestCase):
         self.assertEqual(anonymous.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(foreign.status_code, status.HTTP_403_FORBIDDEN)
         self.assertEqual(owner.status_code, status.HTTP_302_FOUND)
-        self.assertEqual(owner["Location"], f"/media/knowledge/{image.storage_key}")
+        content = self.client.get(owner["Location"])
+        self.assertEqual(content.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(content.streaming_content), PNG)
 
     def test_bound_image_follows_article_visibility(self):
         public_article = self.create_article()

@@ -5,17 +5,17 @@ import {
   useLocation,
 } from 'react-router-dom';
 
-import ProtectedRoute, { SessionLoading } from './auth/ProtectedRoute.jsx';
+import ProtectedRoute, { SessionLoading } from './auth/ProtectedRoute/ProtectedRoute.jsx';
 import useAuth from './auth/useAuth.js';
-import HubPage from './pages/hub/HubPage.jsx';
-import ArticleEditorPage from './pages/knowledge/ArticleEditorPage.jsx';
-import ArticlePage from './pages/knowledge/ArticlePage.jsx';
-import BookPage from './pages/knowledge/BookPage.jsx';
-import KnowledgePage from './pages/knowledge/KnowledgePage.jsx';
-import LibraryPage from './pages/knowledge/LibraryPage.jsx';
-import PublicAuthorPage from './pages/knowledge/PublicAuthorPage.jsx';
-import ReaderPage from './pages/knowledge/ReaderPage.jsx';
-import LoginPage from './pages/LoginPage/LoginPage.jsx';
+import HubPage from './pages/hub/HubPage/HubPage.jsx';
+import ArticleEditorPage from './pages/knowledge/ArticleEditorPage/ArticleEditorPage.jsx';
+import ArticlePage from './pages/knowledge/ArticlePage/ArticlePage.jsx';
+import BookPage from './pages/knowledge/BookPage/BookPage.jsx';
+import KnowledgePage from './pages/knowledge/KnowledgePage/KnowledgePage.jsx';
+import LibraryPage from './pages/knowledge/LibraryPage/LibraryPage.jsx';
+import PublicAuthorPage from './pages/knowledge/PublicAuthorPage/PublicAuthorPage.jsx';
+import ReaderPage from './pages/knowledge/ReaderPage/ReaderPage.jsx';
+import LoginPage from './pages/LoginPage/LoginPage/LoginPage.jsx';
 import ProfilePage from './pages/ProfilePage/ProfilePage.jsx';
 import RootPage from './pages/RootPage.jsx';
 

@@ -1,13 +1,19 @@
 from pathlib import PurePosixPath
+from time import time
+from urllib.parse import urlencode
 from uuid import UUID, uuid4
 
 import boto3
 from botocore.config import Config
 from botocore.exceptions import ClientError
 from django.conf import settings
+from django.core import signing
 from django.core.exceptions import ImproperlyConfigured
 from django.core.files.base import ContentFile, File
 from django.core.files.storage import FileSystemStorage
+from django.urls import reverse
+
+LOCAL_STORAGE_URL_SALT = "knowledge.local-storage"
 
 IMAGE_EXTENSIONS = {
     "image/gif": "gif",
@@ -116,7 +122,6 @@ class LocalKnowledgeStorage:
         location = root or settings.MEDIA_ROOT / "knowledge"
         self._storage = FileSystemStorage(
             location=location,
-            base_url="/media/knowledge/",
             allow_overwrite=True,
         )
 
@@ -138,7 +143,13 @@ class LocalKnowledgeStorage:
         return self._storage.exists(_validate_key(key))
 
     def get_presigned_url(self, key, expires_in):
-        return self._storage.url(_validate_key(key))
+        key = _validate_key(key)
+        token = signing.dumps(
+            {"key": key, "expires_at": int(time()) + expires_in},
+            salt=LOCAL_STORAGE_URL_SALT,
+        )
+        url = reverse("knowledge_local_file", kwargs={"key": key})
+        return f"{url}?{urlencode({'token': token})}"
 
 
 class S3KnowledgeStorage:
