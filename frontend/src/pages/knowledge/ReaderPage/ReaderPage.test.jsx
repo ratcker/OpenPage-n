@@ -19,7 +19,7 @@ const rendererMocks = vi.hoisted(() => ({
   epub: vi.fn(),
 }));
 
-vi.mock('./PdfReader.jsx', () => ({
+vi.mock('../PdfReader/PdfReader.jsx', () => ({
   default: (props) => {
     rendererMocks.pdf(props);
     return (
@@ -44,7 +44,7 @@ vi.mock('./PdfReader.jsx', () => ({
   },
 }));
 
-vi.mock('./EpubReader.jsx', () => ({
+vi.mock('../EpubReader/EpubReader.jsx', () => ({
   default: (props) => {
     rendererMocks.epub(props);
     return (
