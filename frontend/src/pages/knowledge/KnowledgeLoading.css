@@ -1,0 +1,31 @@
+
+
+.author-profile-loading .author-avatar,
+.book-card-loading .book-cover,
+.book-card-loading span,
+.book-card-loading i {
+  border-color: #302b38;
+  background: #1b1820;
+}
+
+.book-card-loading > div:last-child {
+  display: grid;
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.book-card-loading span,
+.book-card-loading i {
+  display: block;
+  height: 9px;
+  border-radius: 4px;
+}
+
+.book-card-loading span {
+  width: 42%;
+}
+
+.book-card-loading i {
+  width: 76%;
+  height: 14px;
+}

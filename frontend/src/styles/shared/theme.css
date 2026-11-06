@@ -1,0 +1,16 @@
+/* Палитра */
+:root {
+  color-scheme: dark;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: auto;
+  --background: #0d0b12;
+  --surface: #131118;
+  --line: #29252f;
+  --text: #f5f3f7;
+  --soft-text: #c8c3cf;
+  --muted-text: #898390;
+  --accent: #8f5cff;
+  --accent-dark: #7542da;
+  --content-width: 1120px;
+}

@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom';
 
-import { BookPublicationNotice } from './BookPublicationInfo.jsx';
+import { BookPublicationNotice } from './BookPublicationInfo/BookPublicationInfo.jsx';
 
 function formatProgress(value) {
   const progress = Number(value);

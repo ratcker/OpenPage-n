@@ -1,5 +1,5 @@
-import Footer from './Footer.jsx';
-import Header from './Header.jsx';
+import Footer from './Footer/Footer.jsx';
+import Header from './Header/Header.jsx';
 
 // Общий каркас
 export default function SiteLayout({ children }) {
