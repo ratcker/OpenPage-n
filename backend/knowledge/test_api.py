@@ -17,7 +17,7 @@ from accounts.models import User
 
 from .models import Book, KnowledgeProfile, StorageCleanupJob, UserLibraryBook
 from .storage import LocalKnowledgeStorage, book_storage_key
-from .storage_cleanup import BOOK_DELETED
+from .storage_cleanup import BOOK_DELETED, process_storage_cleanup_batch
 from .test_helpers import make_epub, make_pdf
 
 
@@ -479,6 +479,46 @@ class BookContentAPITests(KnowledgeAPITestCase):
         with patch("knowledge.views.get_knowledge_storage", return_value=storage):
             response = self.client.get(self.content_url(book))
         return response, storage
+
+    def test_local_content_url_serves_pdf_and_epub(self):
+        storage = LocalKnowledgeStorage()
+        for book_format, content in (("pdf", make_pdf()), ("epub", make_epub())):
+            with self.subTest(format=book_format):
+                book = self.create_model_book(format=book_format)
+                storage.save(book.storage_key, content)
+
+                response = self.client.get(self.content_url(book))
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                file = self.client.get(response.data["url"])
+                self.assertEqual(file.status_code, status.HTTP_200_OK)
+                self.assertEqual(b"".join(file.streaming_content), content)
+
+    def test_private_local_file_requires_signed_url_and_is_cleaned_up(self):
+        book = self.create_model_book(
+            uploaded_by=self.user, visibility=Book.Visibility.PRIVATE
+        )
+        LocalKnowledgeStorage().save(book.storage_key, make_epub())
+        response = self.client.get(self.content_url(book))
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+        self.authenticate()
+        response = self.client.get(self.content_url(book))
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        url = response.data["url"]
+        self.client.credentials()
+        self.assertEqual(self.client.get(url.split("?")[0]).status_code, 403)
+        file = self.client.get(url)
+        self.assertEqual(file.status_code, status.HTTP_200_OK)
+        self.assertEqual(b"".join(file.streaming_content), make_epub())
+
+        self.authenticate()
+        response = self.client.delete(
+            reverse("knowledge_book_detail", kwargs={"book_uuid": book.id})
+        )
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        result = process_storage_cleanup_batch()
+        self.assertEqual(result.completed, 1)
+        self.assertEqual(self.client.get(url).status_code, status.HTTP_404_NOT_FOUND)
 
     def test_anonymous_can_get_public_book_content(self):
         book = self.create_model_book()

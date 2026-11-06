@@ -9,6 +9,7 @@ from .article_views import (
     MyArticleListView,
     PublicAuthorArticlesView,
 )
+from .storage_views import local_file
 from .views import (
     BookContentView,
     BookDetailView,
@@ -25,6 +26,7 @@ from .views import (
 )
 
 urlpatterns = [
+    path("files/<path:key>", local_file, name="knowledge_local_file"),
     path("articles/", ArticleListView.as_view(), name="knowledge_articles"),
     path(
         "articles/mine/",
