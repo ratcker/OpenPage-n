@@ -1,0 +1,35 @@
+project:
+  id: 0812951a-c377-4045-8c09-83595bd5222d
+  hostname: sandbox.xn--e1aamodgc0e.xn--p1ai
+  sourceSHA: "0123456789abcdef0123456789abcdef01234567"
+  configRevision: "revision-1"
+
+services:
+  frontend:
+    image: ghcr.io/example/frontend@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    replicas: 2
+    port: 80
+    resources:
+      requests: {cpu: "100m", memory: "64Mi"}
+      limits: {cpu: "250m", memory: "128Mi"}
+    env:
+      API_PATH: /api
+    readinessProbe:
+      httpGet: {path: /healthz, port: 80}
+  backend:
+    image: ghcr.io/example/backend@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    replicas: 1
+    port: 8000
+    resources:
+      requests: {cpu: "200m", memory: "128Mi"}
+      limits: {cpu: "500m", memory: "256Mi"}
+
+routes:
+  - path: /
+    service: frontend
+  - path: /api
+    service: backend
+
+gateway:
+  name: public
+  namespace: envoy-gateway-system

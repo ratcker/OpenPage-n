@@ -1,0 +1,5 @@
+apiVersion: v2
+name: openpage-app
+description: Renders an OpenPage Engine release into Kubernetes application resources
+type: application
+version: 0.1.0

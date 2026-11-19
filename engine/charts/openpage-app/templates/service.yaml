@@ -1,0 +1,20 @@
+{{- range $name, $service := .Values.services }}
+{{- if $service.port }}
+{{- $identity := dict "projectID" $.Values.project.id "service" $name }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "openpage-app.serviceName" $identity | quote }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    {{- include "openpage-app.selectorLabels" $identity | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "openpage-app.selectorLabels" $identity | nindent 4 }}
+  ports:
+    - port: {{ $service.port }}
+      targetPort: {{ $service.port }}
+{{- end }}
+{{- end }}

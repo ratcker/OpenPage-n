@@ -1,0 +1,59 @@
+{{- range $name, $service := .Values.services }}
+{{- $identity := dict "projectID" $.Values.project.id "service" $name }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "openpage-app.serviceName" $identity | quote }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    {{- include "openpage-app.selectorLabels" $identity | nindent 4 }}
+spec:
+  replicas: {{ $service.replicas }}
+  progressDeadlineSeconds: 600
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      {{- include "openpage-app.selectorLabels" $identity | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "openpage-app.selectorLabels" $identity | nindent 8 }}
+      annotations:
+        openpage/source-sha: {{ $.Values.project.sourceSHA | quote }}
+        openpage/config-revision: {{ $.Values.project.configRevision | quote }}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: {{ $name | quote }}
+          image: {{ $service.image | quote }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: [ALL]
+          resources:
+            {{- toYaml $service.resources | nindent 12 }}
+          {{- with $service.port }}
+          ports:
+            - containerPort: {{ . }}
+          {{- end }}
+          {{- with $service.env }}
+          env:
+            {{- range $key, $value := . }}
+            - name: {{ $key | quote }}
+              value: {{ $value | quote }}
+            {{- end }}
+          {{- end }}
+          {{- with $service.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}
