@@ -55,21 +55,43 @@ class StorageCleanupQueueTests(TestCase):
         )
         storage = RecordingStorage({job.storage_key: 1})
 
-        first = process_storage_cleanup_batch(storage=storage)
+        with self.assertLogs("knowledge.storage_cleanup", level="ERROR") as captured:
+            first = process_storage_cleanup_batch(storage=storage)
         job.refresh_from_db()
 
         self.assertEqual(first.failed, 1)
+        self.assertEqual(captured.records[0].levelname, "ERROR")
+        self.assertIn("Storage cleanup job failed", captured.output[0])
         self.assertIsNone(job.completed_at)
         self.assertEqual(job.attempts, 1)
         self.assertIn("temporary failure", job.last_error)
 
-        second = process_storage_cleanup_batch(storage=storage)
+        with self.assertLogs("knowledge.storage_cleanup", level="INFO") as captured:
+            second = process_storage_cleanup_batch(storage=storage)
         job.refresh_from_db()
 
         self.assertEqual(second.completed, 1)
+        self.assertIn("Storage cleanup batch finished", "\n".join(captured.output))
         self.assertIsNotNone(job.completed_at)
         self.assertEqual(job.attempts, 1)
         self.assertEqual(job.last_error, "")
+
+    def test_repeated_cleanup_failure_is_logged_as_critical(self):
+        job = StorageCleanupJob.objects.create(
+            storage_key="books/repeated-failure.epub",
+            reason="test",
+            attempts=4,
+        )
+        storage = RecordingStorage({job.storage_key: 1})
+
+        with self.assertLogs("knowledge.storage_cleanup", level="CRITICAL") as captured:
+            result = process_storage_cleanup_batch(storage=storage)
+
+        job.refresh_from_db()
+        self.assertEqual(result.failed, 1)
+        self.assertEqual(job.attempts, 5)
+        self.assertEqual(captured.records[0].levelname, "CRITICAL")
+        self.assertIn("Storage cleanup job failed", captured.output[0])
 
     def test_missing_object_is_success_and_completed_job_is_not_reprocessed(self):
         job = StorageCleanupJob.objects.create(

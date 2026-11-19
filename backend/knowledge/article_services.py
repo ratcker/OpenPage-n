@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import timedelta
 
@@ -10,6 +11,9 @@ from .covers import read_image
 from .models import Article, ArticleImage, ArticleImageUploadSession
 from .storage import article_image_storage_key, get_knowledge_storage
 from .storage_cleanup import delete_storage_backed_queryset
+
+
+logger = logging.getLogger(__name__)
 
 
 def upload_session_expires_at(session):
@@ -121,7 +125,12 @@ def create_article_image(*, upload_session, image, storage=None):
             storage.delete(storage_key)
         except Exception:
             # Cleanup не должен скрывать исходную ошибку сохранения.
-            pass
+            logger.warning(
+                "Failed to remove a partially uploaded article image during rollback (session_id=%s storage_key=%s).",
+                upload_session.pk,
+                storage_key,
+                exc_info=True,
+            )
         raise
 
     return article_image

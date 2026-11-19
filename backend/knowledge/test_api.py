@@ -115,13 +115,16 @@ class BookUploadAPITests(KnowledgeAPITestCase):
         return data
 
     def test_author_can_upload_epub(self):
-        response = self.client.post(
-            self.url,
-            self.upload_data(),
-            format="multipart",
-        )
+        with self.assertLogs("knowledge.views", level="INFO") as captured:
+            response = self.client.post(
+                self.url,
+                self.upload_data(),
+                format="multipart",
+            )
 
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn("Book uploaded", "\n".join(captured.output))
+        self.assertNotIn(self.upload_data()["title"], "\n".join(captured.output))
         book = Book.objects.get()
         self.assertEqual(book.status, Book.Status.READY)
         self.assertEqual(response.data["id"], str(book.id))

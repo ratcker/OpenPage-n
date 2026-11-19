@@ -204,54 +204,34 @@ class MeView(APIView):
     permission_classes = (IsAuthenticated,)
 
     @extend_schema(
-        operation_id="auth_me",
-        summary="Получить текущего пользователя",
-        description=(
-            "Возвращает пользователя, которому принадлежит access-токен из "
-            "`Authorization: Bearer <access-token>`."
-        ),
+        operation_id="auth_me", summary="Получить текущего пользователя",
+        description="Возвращает пользователя, которому принадлежит access-токен из `Authorization: Bearer <access-token>`.",
         tags=[AUTH_TAG],
         responses={
             200: OpenApiResponse(
-                response=UserSerializer,
-                description="Текущий пользователь.",
-                examples=[
-                    OpenApiExample(
-                        "Пользователь",
-                        value=EXAMPLE_USER,
-                        response_only=True,
-                    )
-                ],
+                response=UserSerializer, description="Текущий пользователь.",
+                examples=[OpenApiExample("Пользователь", value=EXAMPLE_USER, response_only=True)],
             ),
             401: OpenApiResponse(
                 response=PolymorphicProxySerializer(
                     component_name="AuthenticationError",
-                    serializers=[
-                        DetailResponseSerializer,
-                        InvalidTokenErrorSerializer,
-                    ],
-                    resource_type_field_name=None,
+                    serializers=[DetailResponseSerializer, InvalidTokenErrorSerializer], resource_type_field_name=None,
                 ),
                 description="Access-токен отсутствует, просрочен или недействителен.",
                 examples=[
                     OpenApiExample(
-                        "Токен отсутствует",
-                        value={"detail": "Учетные данные не были предоставлены."},
+                        "Токен отсутствует", value={"detail": "Учетные данные не были предоставлены."},
                         response_only=True,
                     ),
                     OpenApiExample(
                         "Токен недействителен",
                         value={
-                            "detail": (
-                                "Данный токен недействителен для любого типа токенов"
-                            ),
-                            "code": "token_not_valid",
+                            "detail": "Данный токен недействителен для любого типа токенов", "code": "token_not_valid",
                             "messages": [
                                 {
-                                    "token_class": "AccessToken",
-                                    "token_type": "access",
+                                    "token_class": "AccessToken", "token_type": "access",
                                     "message": "Токен недействителен или просрочен",
-                                }
+                                },
                             ],
                         },
                         response_only=True,
@@ -272,8 +252,7 @@ class RegisterView(APIView):
     throttle_classes = (RegisterIPThrottle, RegisterEmailThrottle)
 
     @extend_schema(
-        operation_id="auth_register",
-        summary="Начать регистрацию",
+        operation_id="auth_register", summary="Начать регистрацию",
         description=(
             "Проверяет данные, сохраняет незавершённую регистрацию и отправляет "
             "шестизначный код на email. Пользователь и токены на этом шаге не "
@@ -281,57 +260,38 @@ class RegisterView(APIView):
             "повторная отправка разрешена через "
             f"{REGISTRATION_RESEND_COOLDOWN_SECONDS} секунд."
         ),
-        tags=[AUTH_TAG],
-        auth=[],
-        request=RegisterSerializer,
+        tags=[AUTH_TAG], auth=[], request=RegisterSerializer,
         responses={
             202: OpenApiResponse(
-                response=RegistrationAcceptedSerializer,
-                description="Код подтверждения отправлен.",
+                response=RegistrationAcceptedSerializer, description="Код подтверждения отправлен.",
                 examples=[
                     OpenApiExample(
                         "Регистрация принята",
-                        value={
-                            "detail": "Код подтверждения отправлен на email.",
-                            "email": "anna@example.test",
-                        },
+                        value={"detail": "Код подтверждения отправлен на email.", "email": "anna@example.test"},
                         response_only=True,
-                    )
+                    ),
                 ],
             ),
             400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Ошибка данных или слишком ранняя повторная отправка.",
+                response=VALIDATION_ERROR_SCHEMA, description="Ошибка данных или слишком ранняя повторная отправка.",
                 examples=[
                     OpenApiExample(
-                        "Пароли не совпадают",
-                        value={"password_confirm": ["Пароли не совпадают."]},
-                        response_only=True,
-                    )
+                        "Пароли не совпадают", value={"password_confirm": ["Пароли не совпадают."]}, response_only=True,
+                    ),
                 ],
             ),
-            415: OpenApiResponse(
-                response=DetailResponseSerializer,
-                description="Тело запроса передано не как JSON.",
-            ),
+            415: OpenApiResponse(response=DetailResponseSerializer, description="Тело запроса передано не как JSON."),
             429: OpenApiResponse(
-                response=DetailResponseSerializer,
-                description="Превышен лимит регистрации или отправки писем.",
+                response=DetailResponseSerializer, description="Превышен лимит регистрации или отправки писем.",
             ),
             503: OpenApiResponse(
-                response=DetailResponseSerializer,
-                description="Не удалось отправить письмо.",
+                response=DetailResponseSerializer, description="Не удалось отправить письмо.",
                 examples=[
                     OpenApiExample(
                         "Почтовый сервис недоступен",
-                        value={
-                            "detail": (
-                                "Не удалось отправить код подтверждения. "
-                                "Попробуйте позже."
-                            )
-                        },
+                        value={"detail": "Не удалось отправить код подтверждения. Попробуйте позже."},
                         response_only=True,
-                    )
+                    ),
                 ],
             ),
         },
@@ -339,13 +299,11 @@ class RegisterView(APIView):
             OpenApiExample(
                 "Новая регистрация",
                 value={
-                    "email": "anna@example.test",
-                    "name": "Анна",
-                    "password": "Example-password-123!",
+                    "email": "anna@example.test", "name": "Анна", "password": "Example-password-123!",
                     "password_confirm": "Example-password-123!",
                 },
                 request_only=True,
-            )
+            ),
         ],
     )
     def post(self, request):
@@ -405,6 +363,7 @@ class RegisterView(APIView):
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
+        logger.info("Registration verification code sent.")
         return Response(
             {
                 "detail": "Код подтверждения отправлен на email.",
@@ -422,56 +381,33 @@ class VerifyEmailView(APIView):
     throttle_classes = (VerificationIPThrottle, VerificationEmailThrottle)
 
     @extend_schema(
-        operation_id="auth_verify_email",
-        summary="Подтвердить email",
+        operation_id="auth_verify_email", summary="Подтвердить email",
         description=(
             "Проверяет код незавершённой регистрации и создаёт обычного "
             "пользователя. После "
             f"{settings.REGISTRATION_MAX_ATTEMPTS} неверных попыток код "
             "блокируется. Токены и refresh-cookie не выдаются."
         ),
-        tags=[AUTH_TAG],
-        auth=[],
-        request=VerifyEmailSerializer,
+        tags=[AUTH_TAG], auth=[], request=VerifyEmailSerializer,
         responses={
             201: OpenApiResponse(
-                response=UserSerializer,
-                description="Email подтверждён, пользователь создан.",
+                response=UserSerializer, description="Email подтверждён, пользователь создан.",
                 examples=[
                     OpenApiExample(
-                        "Созданный пользователь",
-                        value={**EXAMPLE_USER, "last_login": None},
-                        response_only=True,
-                    )
+                        "Созданный пользователь", value={**EXAMPLE_USER, "last_login": None}, response_only=True,
+                    ),
                 ],
             ),
             400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Заявка или код недействительны, либо email уже занят.",
-                examples=[
-                    OpenApiExample(
-                        "Неверный код",
-                        value={"code": "Неверный код подтверждения."},
-                        response_only=True,
-                    )
-                ],
+                response=VALIDATION_ERROR_SCHEMA, description="Заявка или код недействительны, либо email уже занят.",
+                examples=[OpenApiExample("Неверный код", value={"code": "Неверный код подтверждения."}, response_only=True)],
             ),
-            415: OpenApiResponse(
-                response=DetailResponseSerializer,
-                description="Тело запроса передано не как JSON.",
-            ),
+            415: OpenApiResponse(response=DetailResponseSerializer, description="Тело запроса передано не как JSON."),
             429: OpenApiResponse(
-                response=DetailResponseSerializer,
-                description="Превышен лимит проверки кода подтверждения.",
+                response=DetailResponseSerializer, description="Превышен лимит проверки кода подтверждения.",
             ),
         },
-        examples=[
-            OpenApiExample(
-                "Код из письма",
-                value={"email": "anna@example.test", "code": "123456"},
-                request_only=True,
-            )
-        ],
+        examples=[OpenApiExample("Код из письма", value={"email": "anna@example.test", "code": "123456"}, request_only=True)],
     )
     def post(self, request):
         serializer = VerifyEmailSerializer(data=request.data)
@@ -516,6 +452,11 @@ class VerifyEmailView(APIView):
             if not check_password(code, pending.code_hash):
                 pending.failed_attempts += 1
                 pending.save(update_fields=["failed_attempts"])
+                logger.warning(
+                    "Email verification code rejected (failed_attempts=%s, limit_reached=%s).",
+                    pending.failed_attempts,
+                    pending.failed_attempts >= settings.REGISTRATION_MAX_ATTEMPTS,
+                )
                 if pending.failed_attempts >= settings.REGISTRATION_MAX_ATTEMPTS:
                     verification_error = {
                         "code": "Превышен лимит попыток. Запросите новый код."
@@ -540,6 +481,7 @@ class VerifyEmailView(APIView):
         if verification_error:
             raise ValidationError(verification_error)
 
+        logger.info("Email verification completed (user_id=%s).", user.pk)
         return Response(
             UserSerializer(user).data,
             status=status.HTTP_201_CREATED,
@@ -553,64 +495,42 @@ class LoginView(APIView):
     throttle_classes = (LoginIPThrottle, LoginEmailThrottle)
 
     @extend_schema(
-        operation_id="auth_login",
-        summary="Войти",
-        description=(
-            "Проверяет email и пароль, возвращает access-токен и пользователя, "
-            "а также устанавливает HttpOnly refresh-cookie. JavaScript получает "
-            "только JSON-ответ и не читает refresh-токен напрямую."
-        ),
-        tags=[AUTH_TAG],
-        auth=[],
-        request=LoginSerializer,
-        parameters=[SET_REFRESH_COOKIE_HEADER],
+        operation_id="auth_login", summary="Войти",
+        description="Проверяет email и пароль, возвращает access-токен и пользователя, а также устанавливает HttpOnly refresh-cookie. JavaScript получает только JSON-ответ и не читает refresh-токен напрямую.",
+        tags=[AUTH_TAG], auth=[], request=LoginSerializer, parameters=[SET_REFRESH_COOKIE_HEADER],
         responses={
             200: OpenApiResponse(
-                response=AuthSessionSerializer,
-                description="Сессия создана.",
-                examples=[
-                    OpenApiExample(
-                        "Успешный вход",
-                        value=EXAMPLE_SESSION,
-                        response_only=True,
-                    )
-                ],
+                response=AuthSessionSerializer, description="Сессия создана.",
+                examples=[OpenApiExample("Успешный вход", value=EXAMPLE_SESSION, response_only=True)],
             ),
             400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Данные отсутствуют или email и пароль не подошли.",
+                response=VALIDATION_ERROR_SCHEMA, description="Данные отсутствуют или email и пароль не подошли.",
                 examples=[
                     OpenApiExample(
-                        "Неверные данные",
-                        value={"non_field_errors": ["Неверный email или пароль."]},
+                        "Неверные данные", value={"non_field_errors": ["Неверный email или пароль."]},
                         response_only=True,
-                    )
+                    ),
                 ],
             ),
-            415: OpenApiResponse(
-                response=DetailResponseSerializer,
-                description="Неподдерживаемый Content-Type запроса.",
-            ),
-            429: OpenApiResponse(
-                response=DetailResponseSerializer,
-                description="Превышен лимит попыток входа.",
-            ),
+            415: OpenApiResponse(response=DetailResponseSerializer, description="Неподдерживаемый Content-Type запроса."),
+            429: OpenApiResponse(response=DetailResponseSerializer, description="Превышен лимит попыток входа."),
         },
         examples=[
             OpenApiExample(
-                "Данные входа",
-                value={
-                    "email": "anna@example.test",
-                    "password": "Example-password-123!",
-                },
+                "Данные входа", value={"email": "anna@example.test", "password": "Example-password-123!"},
                 request_only=True,
-            )
+            ),
         ],
     )
     def post(self, request):
         serializer = LoginSerializer(data=request.data, context={"request": request})
-        serializer.is_valid(raise_exception=True)
+        try:
+            serializer.is_valid(raise_exception=True)
+        except ValidationError:
+            logger.warning("Login attempt rejected.")
+            raise
         user = serializer.validated_data["user"]
+        logger.info("User login succeeded (user_id=%s).", user.pk)
         return auth_response(user, RefreshToken.for_user(user))
 
 
@@ -620,47 +540,22 @@ class RefreshView(APIView):
     permission_classes = (AllowAny,)
 
     @extend_schema(
-        operation_id="auth_refresh",
-        summary="Обновить сессию",
-        description=(
-            "Читает HttpOnly refresh-cookie, блокирует использованный refresh-"
-            "токен, возвращает новый access-токен и пользователя и заменяет "
-            "refresh-cookie. Тело запроса не используется. Swagger UI не может "
-            "задать заголовок Cookie вручную: браузер отправит cookie, полученную "
-            "от login, автоматически."
-        ),
-        tags=[AUTH_TAG],
-        auth=[],
-        request=None,
-        parameters=[
-            REFRESH_COOKIE_REQUIRED,
-            SET_REFRESH_COOKIE_HEADER,
-            CLEAR_INVALID_REFRESH_COOKIE_HEADER,
-        ],
+        operation_id="auth_refresh", summary="Обновить сессию",
+        description="Читает HttpOnly refresh-cookie, блокирует использованный refresh-токен, возвращает новый access-токен и пользователя и заменяет refresh-cookie. Тело запроса не используется. Swagger UI не может задать заголовок Cookie вручную: браузер отправит cookie, полученную от login, автоматически.",
+        tags=[AUTH_TAG], auth=[], request=None,
+        parameters=[REFRESH_COOKIE_REQUIRED, SET_REFRESH_COOKIE_HEADER, CLEAR_INVALID_REFRESH_COOKIE_HEADER],
         responses={
             200: OpenApiResponse(
-                response=AuthSessionSerializer,
-                description="Токены обновлены.",
-                examples=[
-                    OpenApiExample(
-                        "Обновлённая сессия",
-                        value=EXAMPLE_SESSION,
-                        response_only=True,
-                    )
-                ],
+                response=AuthSessionSerializer, description="Токены обновлены.",
+                examples=[OpenApiExample("Обновлённая сессия", value=EXAMPLE_SESSION, response_only=True)],
             ),
             401: OpenApiResponse(
                 response=DetailResponseSerializer,
-                description=(
-                    "Refresh-cookie отсутствует, недействительна, просрочена "
-                    "или принадлежит неактивному пользователю."
-                ),
+                description="Refresh-cookie отсутствует, недействительна, просрочена или принадлежит неактивному пользователю.",
                 examples=[
                     OpenApiExample(
-                        "Cookie отсутствует",
-                        value={"detail": "Refresh-токен отсутствует."},
-                        response_only=True,
-                    )
+                        "Cookie отсутствует", value={"detail": "Refresh-токен отсутствует."}, response_only=True,
+                    ),
                 ],
             ),
         },
@@ -681,6 +576,7 @@ class RefreshView(APIView):
             )
             old_refresh.blacklist()
         except (TokenError, User.DoesNotExist, KeyError):
+            logger.warning("Refresh token rejected.")
             response = Response(
                 {"detail": "Refresh-токен недействителен или истёк."},
                 status=status.HTTP_401_UNAUTHORIZED,
@@ -697,29 +593,14 @@ class LogoutView(APIView):
     permission_classes = (AllowAny,)
 
     @extend_schema(
-        operation_id="auth_logout",
-        summary="Выйти",
-        description=(
-            "Если refresh-cookie содержит пригодный токен, добавляет его в "
-            "blacklist. Независимо от наличия и состояния токена удаляет cookie "
-            "и возвращает успешный ответ. Тело запроса игнорируется."
-        ),
-        tags=[AUTH_TAG],
-        auth=[],
-        request=None,
-        parameters=[REFRESH_COOKIE_OPTIONAL, CLEAR_LOGOUT_COOKIE_HEADER],
+        operation_id="auth_logout", summary="Выйти",
+        description="Если refresh-cookie содержит пригодный токен, добавляет его в blacklist. Независимо от наличия и состояния токена удаляет cookie и возвращает успешный ответ. Тело запроса игнорируется.",
+        tags=[AUTH_TAG], auth=[], request=None, parameters=[REFRESH_COOKIE_OPTIONAL, CLEAR_LOGOUT_COOKIE_HEADER],
         responses={
             200: OpenApiResponse(
-                response=DetailResponseSerializer,
-                description="Локальная refresh-cookie удалена.",
-                examples=[
-                    OpenApiExample(
-                        "Успешный выход",
-                        value={"detail": "Вы вышли из аккаунта."},
-                        response_only=True,
-                    )
-                ],
-            )
+                response=DetailResponseSerializer, description="Локальная refresh-cookie удалена.",
+                examples=[OpenApiExample("Успешный выход", value={"detail": "Вы вышли из аккаунта."}, response_only=True)],
+            ),
         },
     )
     def post(self, request):

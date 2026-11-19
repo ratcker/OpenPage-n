@@ -551,9 +551,13 @@ class AuthenticationTests(APITestCase):
 
     # Вход
     def test_login_returns_access_token_user_and_refresh_cookie(self):
-        response = self.login()
+        with self.assertLogs("accounts.views", level="INFO") as captured:
+            response = self.login()
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn("User login succeeded", "\n".join(captured.output))
+        self.assertNotIn(self.user.email, "\n".join(captured.output))
+        self.assertNotIn(self.password, "\n".join(captured.output))
         self.assertIn("access", response.data)
         self.assertEqual(response.data["user"]["id"], self.user.id)
         self.assertNotIn("refresh", response.data)
@@ -566,9 +570,13 @@ class AuthenticationTests(APITestCase):
         self.assertEqual(int(cookie["max-age"]), int(lifetime.total_seconds()))
 
     def test_login_rejects_invalid_password(self):
-        response = self.login(password="wrong-password")
+        with self.assertLogs("accounts.views", level="WARNING") as captured:
+            response = self.login(password="wrong-password")
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("Login attempt rejected", "\n".join(captured.output))
+        self.assertNotIn(self.user.email, "\n".join(captured.output))
+        self.assertNotIn("wrong-password", "\n".join(captured.output))
         self.assertNotIn("refresh_token", response.cookies)
 
     @override_settings(DEBUG=False)

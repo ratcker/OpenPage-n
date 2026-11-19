@@ -1,3 +1,5 @@
+import logging
+
 from django.conf import settings
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.http import HttpResponseRedirect
@@ -31,6 +33,8 @@ from .pagination import KnowledgePagination
 from .serializers import KnowledgeDetailResponseSerializer
 from .storage import get_knowledge_storage
 from .views import KNOWLEDGE_TAG, VALIDATION_ERROR_SCHEMA
+
+logger = logging.getLogger(__name__)
 
 
 class Gone(APIException):
@@ -70,11 +74,8 @@ class ArticleListView(GenericAPIView):
         return super().get_permissions()
 
     @extend_schema(
-        operation_id="knowledge_articles_list",
-        summary="Получить публичные статьи",
-        description="Возвращает публичные статьи, новые сверху.",
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
+        operation_id="knowledge_articles_list", summary="Получить публичные статьи",
+        description="Возвращает публичные статьи, новые сверху.", tags=[KNOWLEDGE_TAG], auth=[],
         responses={200: ArticleSerializer(many=True)},
     )
     def get(self, request):
@@ -88,21 +89,14 @@ class ArticleListView(GenericAPIView):
         return self.get_paginated_response(serializer.data)
 
     @extend_schema(
-        operation_id="knowledge_articles_create",
-        summary="Создать статью",
-        description=(
-            "Создаёт статью с Markdown body. Опциональная upload session "
-            "привязывает ранее загруженные изображения."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=ArticleWriteSerializer,
+        operation_id="knowledge_articles_create", summary="Создать статью",
+        description="Создаёт статью с Markdown body. Опциональная upload session привязывает ранее загруженные изображения.",
+        tags=[KNOWLEDGE_TAG], request=ArticleWriteSerializer,
         responses={
-            201: ArticleSerializer,
-            400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA),
+            201: ArticleSerializer, 400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="У пользователя нет KnowledgeProfile.",
+                response=KnowledgeDetailResponseSerializer, description="У пользователя нет KnowledgeProfile.",
             ),
         },
     )
@@ -118,6 +112,12 @@ class ArticleListView(GenericAPIView):
         except DjangoValidationError as error:
             raise ValidationError(_validation_detail(error)) from error
 
+        logger.info(
+            "Article created (article_id=%s user_id=%s visibility=%s).",
+            article.pk,
+            request.user.pk,
+            article.visibility,
+        )
         return Response(
             ArticleSerializer(article, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -130,16 +130,12 @@ class MyArticleListView(GenericAPIView):
     serializer_class = ArticleSerializer
 
     @extend_schema(
-        operation_id="knowledge_articles_mine_list",
-        summary="Получить свои статьи",
-        description="Возвращает публичные и приватные статьи текущего автора.",
-        tags=[KNOWLEDGE_TAG],
+        operation_id="knowledge_articles_mine_list", summary="Получить свои статьи",
+        description="Возвращает публичные и приватные статьи текущего автора.", tags=[KNOWLEDGE_TAG],
         responses={
-            200: ArticleSerializer(many=True),
-            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            200: ArticleSerializer(many=True), 401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="У пользователя нет KnowledgeProfile.",
+                response=KnowledgeDetailResponseSerializer, description="У пользователя нет KnowledgeProfile.",
             ),
         },
     )
@@ -169,14 +165,10 @@ class ArticleDetailView(GenericAPIView):
         return get_object_or_404(_article_queryset(), id=article_uuid)
 
     @extend_schema(
-        operation_id="knowledge_articles_retrieve",
-        summary="Получить статью",
-        description="Публичная статья доступна всем, приватная — только автору.",
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
+        operation_id="knowledge_articles_retrieve", summary="Получить статью",
+        description="Публичная статья доступна всем, приватная — только автору.", tags=[KNOWLEDGE_TAG], auth=[],
         responses={
-            200: ArticleSerializer,
-            403: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            200: ArticleSerializer, 403: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             404: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
         },
     )
@@ -187,14 +179,11 @@ class ArticleDetailView(GenericAPIView):
         return Response(ArticleSerializer(article, context={"request": request}).data)
 
     @extend_schema(
-        operation_id="knowledge_articles_update",
-        summary="Изменить статью",
-        description="Изменяет Markdown, заголовок, видимость или добавляет upload session.",
-        tags=[KNOWLEDGE_TAG],
+        operation_id="knowledge_articles_update", summary="Изменить статью",
+        description="Изменяет Markdown, заголовок, видимость или добавляет upload session.", tags=[KNOWLEDGE_TAG],
         request=ArticleWriteSerializer(partial=True),
         responses={
-            200: ArticleSerializer,
-            400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA),
+            200: ArticleSerializer, 400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             404: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
@@ -215,20 +204,19 @@ class ArticleDetailView(GenericAPIView):
             )
         except DjangoValidationError as error:
             raise ValidationError(_validation_detail(error)) from error
+        logger.info(
+            "Article updated (article_id=%s user_id=%s).",
+            article.pk,
+            request.user.pk,
+        )
         return Response(ArticleSerializer(article, context={"request": request}).data)
 
     @extend_schema(
-        operation_id="knowledge_articles_delete",
-        summary="Удалить статью",
-        description=(
-            "Удаляет статью автора и ставит связанные изображения в очередь "
-            "очистки storage."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=None,
+        operation_id="knowledge_articles_delete", summary="Удалить статью",
+        description="Удаляет статью автора и ставит связанные изображения в очередь очистки storage.",
+        tags=[KNOWLEDGE_TAG], request=None,
         responses={
-            204: None,
-            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            204: None, 401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             404: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
         },
@@ -240,7 +228,17 @@ class ArticleDetailView(GenericAPIView):
         try:
             delete_article(article=article)
         except Exception as error:
+            logger.exception(
+                "Article deletion failed (article_id=%s user_id=%s).",
+                article.pk,
+                request.user.pk,
+            )
             raise APIException("Не удалось удалить статью.") from error
+        logger.info(
+            "Article deleted (article_id=%s user_id=%s).",
+            article.pk,
+            request.user.pk,
+        )
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -249,20 +247,21 @@ class ArticleUploadSessionView(GenericAPIView):
     serializer_class = ArticleUploadSessionSerializer
 
     @extend_schema(
-        operation_id="knowledge_article_upload_sessions_create",
-        summary="Начать загрузку изображений статьи",
-        description="Создаёт временную upload session для текущего автора.",
-        tags=[KNOWLEDGE_TAG],
-        request=None,
+        operation_id="knowledge_article_upload_sessions_create", summary="Начать загрузку изображений статьи",
+        description="Создаёт временную upload session для текущего автора.", tags=[KNOWLEDGE_TAG], request=None,
         responses={
-            201: ArticleUploadSessionSerializer,
-            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            201: ArticleUploadSessionSerializer, 401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
         },
     )
     def post(self, request):
         _require_author_profile(request.user)
         session = ArticleImageUploadSession.objects.create(user=request.user)
+        logger.info(
+            "Article image upload session created (session_id=%s user_id=%s).",
+            session.pk,
+            request.user.pk,
+        )
         return Response(
             ArticleUploadSessionSerializer(session).data,
             status=status.HTTP_201_CREATED,
@@ -276,24 +275,17 @@ class ArticleImageUploadView(GenericAPIView):
     throttle_classes = (ArticleImageUploadThrottle,)
 
     @extend_schema(
-        operation_id="knowledge_article_images_upload",
-        summary="Загрузить изображение статьи",
-        description=(
-            "Сохраняет изображение в Knowledge storage и возвращает стабильный "
-            "app-level URL для Markdown."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=ArticleImageUploadSerializer,
+        operation_id="knowledge_article_images_upload", summary="Загрузить изображение статьи",
+        description="Сохраняет изображение в Knowledge storage и возвращает стабильный app-level URL для Markdown.",
+        tags=[KNOWLEDGE_TAG], request=ArticleImageUploadSerializer,
         responses={
-            201: ArticleImageSerializer,
-            400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA),
+            201: ArticleImageSerializer, 400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             404: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             410: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             429: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Превышен лимит загрузки изображений.",
+                response=KnowledgeDetailResponseSerializer, description="Превышен лимит загрузки изображений.",
             ),
         },
     )
@@ -314,7 +306,18 @@ class ArticleImageUploadView(GenericAPIView):
                 storage=storage,
             )
         except Exception as error:
+            logger.exception(
+                "Article image upload failed (session_id=%s user_id=%s).",
+                session.pk,
+                request.user.pk,
+            )
             raise APIException("Не удалось сохранить изображение статьи.") from error
+        logger.info(
+            "Article image uploaded (image_id=%s session_id=%s user_id=%s).",
+            image.pk,
+            session.pk,
+            request.user.pk,
+        )
         return Response(
             ArticleImageSerializer(image, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -326,11 +329,8 @@ class ArticleImageView(GenericAPIView):
     serializer_class = ArticleImageSerializer
 
     @extend_schema(
-        operation_id="knowledge_article_images_retrieve",
-        summary="Открыть изображение статьи",
-        description="Перенаправляет на короткоживущий signed storage URL.",
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
+        operation_id="knowledge_article_images_retrieve", summary="Открыть изображение статьи",
+        description="Перенаправляет на короткоживущий signed storage URL.", tags=[KNOWLEDGE_TAG], auth=[],
         responses={
             302: OpenApiResponse(description="Redirect на signed URL изображения."),
             403: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
@@ -359,6 +359,7 @@ class ArticleImageView(GenericAPIView):
                 settings.KNOWLEDGE_CONTENT_URL_TTL_SECONDS,
             )
         except Exception as error:
+            logger.exception("Article image delivery failed (image_id=%s).", image.pk)
             raise APIException("Не удалось подготовить изображение статьи.") from error
         return HttpResponseRedirect(url)
 
@@ -369,15 +370,9 @@ class PublicAuthorArticlesView(GenericAPIView):
     serializer_class = ArticleSerializer
 
     @extend_schema(
-        operation_id="knowledge_author_articles_list",
-        summary="Получить публичные статьи автора",
-        description="Возвращает публичные статьи автора, новые сверху.",
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
-        responses={
-            200: ArticleSerializer(many=True),
-            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
-        },
+        operation_id="knowledge_author_articles_list", summary="Получить публичные статьи автора",
+        description="Возвращает публичные статьи автора, новые сверху.", tags=[KNOWLEDGE_TAG], auth=[],
+        responses={200: ArticleSerializer(many=True), 404: OpenApiResponse(response=KnowledgeDetailResponseSerializer)},
     )
     def get(self, request, profile_uuid):
         profile = get_object_or_404(KnowledgeProfile, public_id=profile_uuid)

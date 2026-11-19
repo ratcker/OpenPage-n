@@ -1,4 +1,5 @@
 import base64
+import logging
 
 from django.conf import settings
 from django.db import transaction
@@ -42,6 +43,8 @@ from .services import (
 )
 from .storage import get_knowledge_storage
 from .storage_cleanup import delete_storage_backed_queryset
+
+logger = logging.getLogger(__name__)
 
 KNOWLEDGE_TAG = "База знаний"
 BOOK_MAX_UPLOAD_MB = settings.KNOWLEDGE_BOOK_MAX_UPLOAD_BYTES // (1024 * 1024)
@@ -94,11 +97,8 @@ class BookListView(GenericAPIView):
         return super().get_permissions()
 
     @extend_schema(
-        operation_id="knowledge_books_list",
-        summary="Получить каталог книг",
-        description="Возвращает только публичные книги, новые сверху.",
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
+        operation_id="knowledge_books_list", summary="Получить каталог книг",
+        description="Возвращает только публичные книги, новые сверху.", tags=[KNOWLEDGE_TAG], auth=[],
         responses={200: BookSerializer(many=True)},
     )
     def get(self, request):
@@ -111,8 +111,7 @@ class BookListView(GenericAPIView):
         return self.get_paginated_response(serializer.data)
 
     @extend_schema(
-        operation_id="knowledge_books_upload",
-        summary="Загрузить книгу",
+        operation_id="knowledge_books_upload", summary="Загрузить книгу",
         description=(
             "Создаёт книгу из multipart-файла и добавляет её в библиотеку текущего "
             f"пользователя. Принимает PDF или EPUB размером до {BOOK_MAX_UPLOAD_MB} "
@@ -122,60 +121,43 @@ class BookListView(GenericAPIView):
             " Для публичной публикации нужно указать основание и подтвердить "
             "наличие необходимых прав."
         ),
-        tags=[KNOWLEDGE_TAG],
-        request=BookUploadSerializer,
+        tags=[KNOWLEDGE_TAG], request=BookUploadSerializer,
         responses={
             201: OpenApiResponse(
-                response=BookSerializer,
-                description="Книга сохранена и добавлена в библиотеку.",
+                response=BookSerializer, description="Книга сохранена и добавлена в библиотеку.",
                 examples=[
                     OpenApiExample(
                         "Загруженная книга",
                         value={
-                            "id": "2c9f34e4-d3f1-44d6-ae72-228c87496f3d",
-                            "title": "Книга автора",
-                            "author": "Автор книги",
-                            "description": "Описание",
-                            "format": "epub",
-                            "visibility": "public",
-                            "publication_basis": "author",
-                            "rights_confirmed_at": "2026-08-30T12:00:00Z",
-                            "rights_statement_version": "1",
-                            "status": "ready",
-                            "created_at": "2026-08-30T12:00:00Z",
+                            "id": "2c9f34e4-d3f1-44d6-ae72-228c87496f3d", "title": "Книга автора",
+                            "author": "Автор книги", "description": "Описание", "format": "epub", "visibility": "public",
+                            "publication_basis": "author", "rights_confirmed_at": "2026-08-30T12:00:00Z",
+                            "rights_statement_version": "1", "status": "ready", "created_at": "2026-08-30T12:00:00Z",
                             "updated_at": "2026-08-30T12:00:01Z",
                         },
                         response_only=True,
-                    )
+                    ),
                 ],
             ),
             400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Файл или поля multipart-запроса не прошли проверку.",
+                response=VALIDATION_ERROR_SCHEMA, description="Файл или поля multipart-запроса не прошли проверку.",
             ),
             401: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Access-токен отсутствует или недействителен.",
+                response=KnowledgeDetailResponseSerializer, description="Access-токен отсутствует или недействителен.",
             ),
             403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="У пользователя нет KnowledgeProfile.",
+                response=KnowledgeDetailResponseSerializer, description="У пользователя нет KnowledgeProfile.",
                 examples=[
                     OpenApiExample(
-                        "Профиль автора отсутствует",
-                        value={"detail": "Для загрузки книги нужен профиль автора."},
+                        "Профиль автора отсутствует", value={"detail": "Для загрузки книги нужен профиль автора."},
                         response_only=True,
-                    )
+                    ),
                 ],
             ),
             415: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Запрос передан не как multipart/form-data.",
+                response=KnowledgeDetailResponseSerializer, description="Запрос передан не как multipart/form-data.",
             ),
-            429: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Превышен лимит загрузки книг.",
-            ),
+            429: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Превышен лимит загрузки книг."),
         },
     )
     def post(self, request):
@@ -204,7 +186,15 @@ class BookListView(GenericAPIView):
         except InvalidBookFile as error:
             raise ValidationError({"file": str(error)}) from error
         except Exception as error:
+            logger.exception("Book upload failed (user_id=%s).", request.user.pk)
             raise APIException("Не удалось сохранить книгу.") from error
+        logger.info(
+            "Book uploaded (book_id=%s user_id=%s format=%s visibility=%s).",
+            book.pk,
+            request.user.pk,
+            book.format,
+            book.visibility,
+        )
         return Response(
             BookSerializer(book, context={"request": request}).data,
             status=status.HTTP_201_CREATED,
@@ -222,24 +212,13 @@ class BookDetailView(GenericAPIView):
         return super().get_permissions()
 
     @extend_schema(
-        operation_id="knowledge_books_retrieve",
-        summary="Получить книгу",
-        description=(
-            "Публичная книга доступна всем пользователям, "
-            "приватная — только загрузившему её пользователю."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
+        operation_id="knowledge_books_retrieve", summary="Получить книгу",
+        description="Публичная книга доступна всем пользователям, приватная — только загрузившему её пользователю.",
+        tags=[KNOWLEDGE_TAG], auth=[],
         responses={
             200: BookSerializer,
-            403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Чужая приватная книга.",
-            ),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Книга не найдена.",
-            ),
+            403: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Чужая приватная книга."),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Книга не найдена."),
         },
     )
     def get(self, request, book_uuid):
@@ -252,29 +231,18 @@ class BookDetailView(GenericAPIView):
         return Response(BookSerializer(book, context={"request": request}).data)
 
     @extend_schema(
-        operation_id="knowledge_books_metadata_update",
-        summary="Изменить metadata книги",
-        description=(
-            "Позволяет загрузившему книгу пользователю изменить metadata и заменить "
-            "обложку. Формат, видимость, исходный файл и системные поля неизменяемы."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=BookUpdateSerializer,
+        operation_id="knowledge_books_metadata_update", summary="Изменить metadata книги",
+        description="Позволяет загрузившему книгу пользователю изменить metadata и заменить обложку. Формат, видимость, исходный файл и системные поля неизменяемы.",
+        tags=[KNOWLEDGE_TAG], request=BookUpdateSerializer,
         responses={
             200: BookSerializer,
-            400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Metadata или обложка не прошли валидацию.",
-            ),
+            400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA, description="Metadata или обложка не прошли валидацию."),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(
                 response=KnowledgeDetailResponseSerializer,
                 description="Изменять книгу может только загрузивший её пользователь.",
             ),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Книга не найдена.",
-            ),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Книга не найдена."),
         },
     )
     def patch(self, request, book_uuid):
@@ -292,7 +260,17 @@ class BookDetailView(GenericAPIView):
                 storage=storage,
             )
         except Exception as error:
+            logger.exception(
+                "Book metadata update failed (book_id=%s user_id=%s).",
+                book.pk,
+                request.user.pk,
+            )
             raise APIException("Не удалось обновить metadata книги.") from error
+        logger.info(
+            "Book metadata updated (book_id=%s user_id=%s).",
+            book.pk,
+            request.user.pk,
+        )
         return Response(
             BookSerializer(
                 book,
@@ -301,12 +279,8 @@ class BookDetailView(GenericAPIView):
         )
 
     @extend_schema(
-        operation_id="knowledge_books_delete",
-        summary="Удалить книгу",
-        description=(
-            "Полностью удаляет загруженную владельцем книгу и записи всех "
-            "читателей. Файлы и обложка удаляются через очередь очистки storage."
-        ),
+        operation_id="knowledge_books_delete", summary="Удалить книгу",
+        description="Полностью удаляет загруженную владельцем книгу и записи всех читателей. Файлы и обложка удаляются через очередь очистки storage.",
         tags=[KNOWLEDGE_TAG],
         responses={
             204: OpenApiResponse(description="Книга удалена."),
@@ -315,10 +289,7 @@ class BookDetailView(GenericAPIView):
                 response=KnowledgeDetailResponseSerializer,
                 description="Удалять книгу может только загрузивший её пользователь.",
             ),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Книга не найдена.",
-            ),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Книга не найдена."),
         },
     )
     def delete(self, request, book_uuid):
@@ -326,7 +297,16 @@ class BookDetailView(GenericAPIView):
         if book.uploaded_by_id != request.user.id:
             raise PermissionDenied("Удалять книгу может только её владелец.")
 
-        delete_storage_backed_queryset(Book.objects.filter(id=book.id))
+        try:
+            delete_storage_backed_queryset(Book.objects.filter(id=book.id))
+        except Exception:
+            logger.exception(
+                "Book deletion failed (book_id=%s user_id=%s).",
+                book.pk,
+                request.user.pk,
+            )
+            raise
+        logger.info("Book deleted (book_id=%s user_id=%s).", book.pk, request.user.pk)
         return Response(status=status.HTTP_204_NO_CONTENT)
 
 
@@ -336,24 +316,15 @@ class EpubPreviewView(GenericAPIView):
     serializer_class = EpubPreviewUploadSerializer
 
     @extend_schema(
-        operation_id="knowledge_books_preview",
-        summary="Получить preview metadata EPUB",
-        description=(
-            "Извлекает основные metadata и обложку из EPUB без создания книги "
-            "и без постоянного сохранения файла. Требуется профиль автора."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=EpubPreviewUploadSerializer,
+        operation_id="knowledge_books_preview", summary="Получить preview metadata EPUB",
+        description="Извлекает основные metadata и обложку из EPUB без создания книги и без постоянного сохранения файла. Требуется профиль автора.",
+        tags=[KNOWLEDGE_TAG], request=EpubPreviewUploadSerializer,
         responses={
             200: EpubPreviewSerializer,
-            400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Файл не является корректным EPUB.",
-            ),
+            400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA, description="Файл не является корректным EPUB."),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="У пользователя нет KnowledgeProfile.",
+                response=KnowledgeDetailResponseSerializer, description="У пользователя нет KnowledgeProfile.",
             ),
         },
     )
@@ -389,28 +360,15 @@ class BookContentView(GenericAPIView):
     serializer_class = BookContentSerializer
 
     @extend_schema(
-        operation_id="knowledge_books_content_retrieve",
-        summary="Получить временный URL книги",
-        description=(
-            "Возвращает короткоживущий signed URL файла. Публичная книга доступна "
-            "анонимно; приватная — только загрузившему её пользователю. При успешном "
-            "доступе авторизованного пользователя книга появляется в его библиотеке."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
+        operation_id="knowledge_books_content_retrieve", summary="Получить временный URL книги",
+        description="Возвращает короткоживущий signed URL файла. Публичная книга доступна анонимно; приватная — только загрузившему её пользователю. При успешном доступе авторизованного пользователя книга появляется в его библиотеке.",
+        tags=[KNOWLEDGE_TAG], auth=[],
         responses={
             200: BookContentSerializer,
-            403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Чужая приватная книга.",
-            ),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Книга не найдена.",
-            ),
+            403: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Чужая приватная книга."),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Книга не найдена."),
             500: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Не удалось подготовить временный URL.",
+                response=KnowledgeDetailResponseSerializer, description="Не удалось подготовить временный URL.",
             ),
         },
     )
@@ -426,6 +384,7 @@ class BookContentView(GenericAPIView):
                 expires_in,
             )
         except Exception as error:
+            logger.exception("Book content delivery failed (book_id=%s).", book.pk)
             raise APIException("Не удалось подготовить файл книги.") from error
 
         if request.user.is_authenticated:
@@ -439,25 +398,13 @@ class BookProgressView(GenericAPIView):
     serializer_class = BookProgressSerializer
 
     @extend_schema(
-        operation_id="knowledge_books_progress_retrieve",
-        summary="Получить сохранённую позицию книги",
-        description=(
-            "Возвращает прогресс текущего пользователя для одной доступной книги. "
-            "Если книга ещё не добавлена в библиотеку, поля имеют значение null. "
-            "Запрос не добавляет книгу в библиотеку."
-        ),
+        operation_id="knowledge_books_progress_retrieve", summary="Получить сохранённую позицию книги",
+        description="Возвращает прогресс текущего пользователя для одной доступной книги. Если книга ещё не добавлена в библиотеку, поля имеют значение null. Запрос не добавляет книгу в библиотеку.",
         tags=[KNOWLEDGE_TAG],
         responses={
-            200: BookProgressSerializer,
-            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
-            403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Чужая приватная книга.",
-            ),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Книга не найдена.",
-            ),
+            200: BookProgressSerializer, 401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            403: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Чужая приватная книга."),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Книга не найдена."),
         },
     )
     def get(self, request, book_uuid):
@@ -483,17 +430,10 @@ class LibraryListView(GenericAPIView):
     serializer_class = UserLibraryBookSerializer
 
     @extend_schema(
-        operation_id="knowledge_library_list",
-        summary="Получить личную библиотеку",
-        description=(
-            "Возвращает публичные и собственные приватные книги текущего "
-            "пользователя, новые добавления сверху."
-        ),
+        operation_id="knowledge_library_list", summary="Получить личную библиотеку",
+        description="Возвращает публичные и собственные приватные книги текущего пользователя, новые добавления сверху.",
         tags=[KNOWLEDGE_TAG],
-        responses={
-            200: UserLibraryBookSerializer(many=True),
-            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
-        },
+        responses={200: UserLibraryBookSerializer(many=True), 401: OpenApiResponse(response=KnowledgeDetailResponseSerializer)},
     )
     def get(self, request):
         entries = (
@@ -522,32 +462,17 @@ class LibraryBookView(GenericAPIView):
     serializer_class = UserLibraryBookSerializer
 
     @extend_schema(
-        operation_id="knowledge_library_add",
-        summary="Добавить книгу в библиотеку",
-        description=(
-            "Идемпотентно добавляет публичную или собственную приватную книгу. "
-            "Повторный запрос возвращает существующую связь."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=None,
+        operation_id="knowledge_library_add", summary="Добавить книгу в библиотеку",
+        description="Идемпотентно добавляет публичную или собственную приватную книгу. Повторный запрос возвращает существующую связь.",
+        tags=[KNOWLEDGE_TAG], request=None,
         responses={
-            200: OpenApiResponse(
-                response=UserLibraryBookSerializer,
-                description="Книга уже находилась в библиотеке.",
-            ),
-            201: OpenApiResponse(
-                response=UserLibraryBookSerializer,
-                description="Книга добавлена в библиотеку.",
-            ),
+            200: OpenApiResponse(response=UserLibraryBookSerializer, description="Книга уже находилась в библиотеке."),
+            201: OpenApiResponse(response=UserLibraryBookSerializer, description="Книга добавлена в библиотеку."),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
             403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Чужую приватную книгу добавить нельзя.",
+                response=KnowledgeDetailResponseSerializer, description="Чужую приватную книгу добавить нельзя.",
             ),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Книга не найдена.",
-            ),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Книга не найдена."),
         },
     )
     def post(self, request, book_uuid):
@@ -563,15 +488,9 @@ class LibraryBookView(GenericAPIView):
         )
 
     @extend_schema(
-        operation_id="knowledge_library_remove",
-        summary="Убрать книгу из библиотеки",
-        description=(
-            "Удаляет книгу только из библиотеки текущего пользователя. "
-            "Вместе с библиотечной записью сбрасывается сохранённый прогресс чтения; "
-            "сама книга и записи других пользователей сохраняются."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=None,
+        operation_id="knowledge_library_remove", summary="Убрать книгу из библиотеки",
+        description="Удаляет книгу только из библиотеки текущего пользователя. Вместе с библиотечной записью сбрасывается сохранённый прогресс чтения; сама книга и записи других пользователей сохраняются.",
+        tags=[KNOWLEDGE_TAG], request=None,
         responses={
             204: OpenApiResponse(description="Книга убрана из библиотеки."),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
@@ -597,33 +516,17 @@ class LibraryProgressView(GenericAPIView):
     serializer_class = ReadingProgressSerializer
 
     @extend_schema(
-        operation_id="knowledge_library_progress_update",
-        summary="Сохранить позицию чтения",
-        description=(
-            "Сохраняет последнюю позицию и процент чтения для текущего пользователя. "
-            "Для доступной книги отсутствующая связь с библиотекой создаётся автоматически; "
-            "последняя запись полностью заменяет предыдущий progress."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=ReadingProgressSerializer,
+        operation_id="knowledge_library_progress_update", summary="Сохранить позицию чтения",
+        description="Сохраняет последнюю позицию и процент чтения для текущего пользователя. Для доступной книги отсутствующая связь с библиотекой создаётся автоматически; последняя запись полностью заменяет предыдущий progress.",
+        tags=[KNOWLEDGE_TAG], request=ReadingProgressSerializer,
         responses={
             200: UserLibraryBookSerializer,
-            400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Progress не прошёл валидацию.",
-            ),
+            400: OpenApiResponse(response=VALIDATION_ERROR_SCHEMA, description="Progress не прошёл валидацию."),
             401: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Access-токен отсутствует или недействителен.",
+                response=KnowledgeDetailResponseSerializer, description="Access-токен отсутствует или недействителен.",
             ),
-            403: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Чужая приватная книга.",
-            ),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Книга не найдена.",
-            ),
+            403: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Чужая приватная книга."),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Книга не найдена."),
         },
     )
     def patch(self, request, book_uuid):
@@ -660,17 +563,11 @@ class KnowledgeProfileView(GenericAPIView):
     serializer_class = KnowledgeProfileSerializer
 
     @extend_schema(
-        operation_id="knowledge_profile_retrieve",
-        summary="Получить профиль в Базе знаний",
-        description="Возвращает только KnowledgeProfile текущего пользователя.",
-        tags=[KNOWLEDGE_TAG],
+        operation_id="knowledge_profile_retrieve", summary="Получить профиль в Базе знаний",
+        description="Возвращает только KnowledgeProfile текущего пользователя.", tags=[KNOWLEDGE_TAG],
         responses={
-            200: KnowledgeProfileSerializer,
-            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="KnowledgeProfile отсутствует.",
-            ),
+            200: KnowledgeProfileSerializer, 401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="KnowledgeProfile отсутствует."),
         },
     )
     def get(self, request):
@@ -684,25 +581,16 @@ class KnowledgeProfileView(GenericAPIView):
         )
 
     @extend_schema(
-        operation_id="knowledge_profile_create",
-        summary="Создать профиль автора",
-        description=(
-            "Создаёт KnowledgeProfile текущего пользователя сразу, без moderation. "
-            "Повторное создание возвращает 409 Conflict."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=KnowledgeProfileWriteSerializer,
+        operation_id="knowledge_profile_create", summary="Создать профиль автора",
+        description="Создаёт KnowledgeProfile текущего пользователя сразу, без moderation. Повторное создание возвращает 409 Conflict.",
+        tags=[KNOWLEDGE_TAG], request=KnowledgeProfileWriteSerializer,
         responses={
             201: KnowledgeProfileSerializer,
             400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Поля профиля или avatar не прошли валидацию.",
+                response=VALIDATION_ERROR_SCHEMA, description="Поля профиля или avatar не прошли валидацию.",
             ),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
-            409: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="KnowledgeProfile уже существует.",
-            ),
+            409: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="KnowledgeProfile уже существует."),
         },
     )
     def post(self, request):
@@ -721,10 +609,23 @@ class KnowledgeProfileView(GenericAPIView):
         except IntegrityError as error:
             if KnowledgeProfile.objects.filter(user=request.user).exists():
                 raise Conflict("Профиль автора уже существует.") from error
+            logger.exception(
+                "Knowledge profile creation failed (user_id=%s).",
+                request.user.pk,
+            )
             raise APIException("Не удалось создать профиль автора.") from error
         except Exception as error:
+            logger.exception(
+                "Knowledge profile creation failed (user_id=%s).",
+                request.user.pk,
+            )
             raise APIException("Не удалось создать профиль автора.") from error
 
+        logger.info(
+            "Knowledge profile created (profile_id=%s user_id=%s).",
+            profile.pk,
+            request.user.pk,
+        )
         return Response(
             KnowledgeProfileSerializer(
                 profile,
@@ -734,25 +635,16 @@ class KnowledgeProfileView(GenericAPIView):
         )
 
     @extend_schema(
-        operation_id="knowledge_profile_update",
-        summary="Изменить профиль автора",
-        description=(
-            "Обновляет профиль текущего пользователя. Новый avatar безопасно "
-            "заменяет предыдущий объект в Knowledge storage."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=KnowledgeProfileWriteSerializer(partial=True),
+        operation_id="knowledge_profile_update", summary="Изменить профиль автора",
+        description="Обновляет профиль текущего пользователя. Новый avatar безопасно заменяет предыдущий объект в Knowledge storage.",
+        tags=[KNOWLEDGE_TAG], request=KnowledgeProfileWriteSerializer(partial=True),
         responses={
             200: KnowledgeProfileSerializer,
             400: OpenApiResponse(
-                response=VALIDATION_ERROR_SCHEMA,
-                description="Поля профиля или avatar не прошли валидацию.",
+                response=VALIDATION_ERROR_SCHEMA, description="Поля профиля или avatar не прошли валидацию.",
             ),
             401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="KnowledgeProfile отсутствует.",
-            ),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="KnowledgeProfile отсутствует."),
         },
     )
     def patch(self, request):
@@ -770,8 +662,18 @@ class KnowledgeProfileView(GenericAPIView):
                 storage=storage,
             )
         except Exception as error:
+            logger.exception(
+                "Knowledge profile update failed (profile_id=%s user_id=%s).",
+                profile.pk,
+                request.user.pk,
+            )
             raise APIException("Не удалось обновить профиль автора.") from error
 
+        logger.info(
+            "Knowledge profile updated (profile_id=%s user_id=%s).",
+            profile.pk,
+            request.user.pk,
+        )
         return Response(
             KnowledgeProfileSerializer(
                 profile,
@@ -785,31 +687,34 @@ class KnowledgeProfileAvatarView(GenericAPIView):
     serializer_class = KnowledgeProfileSerializer
 
     @extend_schema(
-        operation_id="knowledge_profile_avatar_delete",
-        summary="Удалить avatar профиля автора",
-        description=(
-            "Убирает avatar из профиля и ставит объект в очередь очистки storage. "
-            "Повторный вызов без avatar возвращает неизменённый профиль."
-        ),
-        tags=[KNOWLEDGE_TAG],
-        request=None,
+        operation_id="knowledge_profile_avatar_delete", summary="Удалить avatar профиля автора",
+        description="Убирает avatar из профиля и ставит объект в очередь очистки storage. Повторный вызов без avatar возвращает неизменённый профиль.",
+        tags=[KNOWLEDGE_TAG], request=None,
         responses={
-            200: KnowledgeProfileSerializer,
-            401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="KnowledgeProfile отсутствует.",
-            ),
+            200: KnowledgeProfileSerializer, 401: OpenApiResponse(response=KnowledgeDetailResponseSerializer),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="KnowledgeProfile отсутствует."),
         },
     )
     def delete(self, request):
         profile = get_object_or_404(KnowledgeProfile, user=request.user)
+        had_avatar = bool(profile.avatar)
         storage = get_knowledge_storage()
         try:
             profile = delete_knowledge_profile_avatar(profile=profile)
         except Exception as error:
+            logger.exception(
+                "Knowledge profile avatar deletion failed (profile_id=%s user_id=%s).",
+                profile.pk,
+                request.user.pk,
+            )
             raise APIException("Не удалось удалить avatar профиля.") from error
 
+        if had_avatar:
+            logger.info(
+                "Knowledge profile avatar deleted (profile_id=%s user_id=%s).",
+                profile.pk,
+                request.user.pk,
+            )
         return Response(
             KnowledgeProfileSerializer(
                 profile,
@@ -823,17 +728,11 @@ class PublicAuthorView(GenericAPIView):
     serializer_class = KnowledgeProfileSerializer
 
     @extend_schema(
-        operation_id="knowledge_author_retrieve",
-        summary="Получить публичный профиль автора",
-        description="Возвращает только публично безопасные поля KnowledgeProfile.",
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
+        operation_id="knowledge_author_retrieve", summary="Получить публичный профиль автора",
+        description="Возвращает только публично безопасные поля KnowledgeProfile.", tags=[KNOWLEDGE_TAG], auth=[],
         responses={
             200: KnowledgeProfileSerializer,
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Профиль автора не найден.",
-            ),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Профиль автора не найден."),
         },
     )
     def get(self, request, profile_uuid):
@@ -853,17 +752,11 @@ class PublicAuthorBooksView(GenericAPIView):
     serializer_class = BookSerializer
 
     @extend_schema(
-        operation_id="knowledge_author_books_list",
-        summary="Получить публичные книги автора",
-        description="Возвращает публичные книги автора, новые сверху.",
-        tags=[KNOWLEDGE_TAG],
-        auth=[],
+        operation_id="knowledge_author_books_list", summary="Получить публичные книги автора",
+        description="Возвращает публичные книги автора, новые сверху.", tags=[KNOWLEDGE_TAG], auth=[],
         responses={
             200: BookSerializer(many=True),
-            404: OpenApiResponse(
-                response=KnowledgeDetailResponseSerializer,
-                description="Профиль автора не найден.",
-            ),
+            404: OpenApiResponse(response=KnowledgeDetailResponseSerializer, description="Профиль автора не найден."),
         },
     )
     def get(self, request, profile_uuid):

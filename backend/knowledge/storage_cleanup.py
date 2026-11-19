@@ -1,3 +1,4 @@
+import logging
 from dataclasses import dataclass
 
 from botocore.exceptions import ClientError
@@ -15,6 +16,9 @@ from .models import (
     StorageCleanupJob,
 )
 from .storage import get_knowledge_storage
+
+logger = logging.getLogger(__name__)
+CRITICAL_CLEANUP_ATTEMPTS = 5
 
 ARTICLE_DELETED = "article_deleted"
 ARTICLE_IMAGE_DELETED = "article_image_deleted"
@@ -39,7 +43,13 @@ def enqueue_storage_cleanup(storage_key, reason):
         raise ValueError("Storage cleanup requires a storage key.")
     if not reason:
         raise ValueError("Storage cleanup requires a reason.")
-    return StorageCleanupJob.objects.create(storage_key=storage_key, reason=reason)
+    job = StorageCleanupJob.objects.create(storage_key=storage_key, reason=reason)
+    logger.debug(
+        "Storage cleanup job queued (job_id=%s reason=%s).",
+        job.pk,
+        reason,
+    )
+    return job
 
 
 def _storage_keys_for_delete(model, object_ids):
@@ -85,13 +95,28 @@ def delete_storage_backed_queryset(queryset):
     with transaction.atomic():
         object_ids = list(queryset.select_for_update().values_list("pk", flat=True))
         if not object_ids:
+            logger.debug(
+                "Storage-backed deletion skipped because queryset is empty (model=%s).",
+                model._meta.label,
+            )
             return 0, {}
 
         keys, reason = _storage_keys_for_delete(model, object_ids)
+        queued_count = 0
         for key in dict.fromkeys(key for key in keys if key):
             enqueue_storage_cleanup(key, reason)
+            queued_count += 1
 
-        return model.objects.filter(pk__in=object_ids).delete()
+        deleted_count, deleted_objects = model.objects.filter(pk__in=object_ids).delete()
+        logger.info(
+            "Storage-backed objects deleted (model=%s selected=%s deleted=%s cleanup_jobs=%s reason=%s).",
+            model._meta.label,
+            len(object_ids),
+            deleted_count,
+            queued_count,
+            reason,
+        )
+        return deleted_count, deleted_objects
 
 
 def _advisory_lock_id(job_id):
@@ -130,6 +155,11 @@ def _claim_pending_jobs(batch_size):
             for job in jobs[:batch_size]:
                 if _try_advisory_lock(job.id):
                     claimed.append(job)
+                else:
+                    logger.debug(
+                        "Storage cleanup job is already being processed (job_id=%s).",
+                        job.pk,
+                    )
     except Exception:
         for job in claimed:
             _release_advisory_lock(job.id)
@@ -173,6 +203,7 @@ def process_storage_cleanup_batch(*, batch_size=100, storage=None):
     if storage is None:
         storage = get_knowledge_storage()
 
+    logger.debug("Starting storage cleanup batch (batch_size=%s).", batch_size)
     jobs = _claim_pending_jobs(batch_size)
     completed = 0
     failed = 0
@@ -186,14 +217,40 @@ def process_storage_cleanup_batch(*, batch_size=100, storage=None):
                     raise
             _record_success(job)
             completed += 1
+            logger.debug(
+                "Storage cleanup job completed (job_id=%s reason=%s attempts=%s).",
+                job.pk,
+                job.reason,
+                job.attempts,
+            )
         except Exception as error:
             _record_failure(job, error)
             failed += 1
+            log_failure = (
+                logger.critical
+                if job.attempts + 1 >= CRITICAL_CLEANUP_ATTEMPTS
+                else logger.error
+            )
+            log_failure(
+                "Storage cleanup job failed (job_id=%s reason=%s attempts=%s).",
+                job.pk,
+                job.reason,
+                job.attempts + 1,
+                exc_info=True,
+            )
         finally:
             _release_advisory_lock(job.id)
 
-    return CleanupBatchResult(
+    result = CleanupBatchResult(
         claimed=len(jobs),
         completed=completed,
         failed=failed,
     )
+    if result.claimed:
+        logger.info(
+            "Storage cleanup batch finished (claimed=%s completed=%s failed=%s).",
+            result.claimed,
+            result.completed,
+            result.failed,
+        )
+    return result

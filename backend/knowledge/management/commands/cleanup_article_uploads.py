@@ -1,3 +1,4 @@
+import logging
 from datetime import timedelta
 
 from django.conf import settings
@@ -7,6 +8,9 @@ from django.utils import timezone
 from knowledge.article_services import delete_abandoned_upload_session
 from knowledge.models import ArticleImageUploadSession
 from knowledge.storage import get_knowledge_storage
+
+
+logger = logging.getLogger(__name__)
 
 
 class Command(BaseCommand):
@@ -31,6 +35,8 @@ class Command(BaseCommand):
                     storage=storage,
                 )
         except Exception as error:
+            logger.exception("Failed to clean up abandoned article uploads.")
             raise CommandError("Не удалось очистить upload sessions статей.") from error
 
+        logger.info("Abandoned article uploads cleaned (deleted_sessions=%s).", deleted)
         self.stdout.write(self.style.SUCCESS(f"Удалено upload sessions: {deleted}"))

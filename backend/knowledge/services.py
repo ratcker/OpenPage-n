@@ -1,3 +1,4 @@
+import logging
 import uuid
 
 from django.core.exceptions import ValidationError
@@ -21,13 +22,20 @@ from .storage_cleanup import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def _cleanup(storage, keys):
     for key in reversed(keys):
         try:
             storage.delete(key)
         except Exception:
             # Сбой удаления не должен заменить исходную ошибку загрузки.
-            pass
+            logger.warning(
+                "Failed to remove a partially uploaded storage object during rollback (storage_key=%s).",
+                key,
+                exc_info=True,
+            )
 
 
 def create_book(
