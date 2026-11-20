@@ -19,12 +19,12 @@ from rest_framework.test import APITestCase
 from rest_framework.throttling import SimpleRateThrottle
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from accounts.models import PendingRegistration, User
-from knowledge.models import ArticleImageUploadSession, Book, KnowledgeProfile
-from knowledge.test_helpers import make_epub
+from backend.accounts.models import PendingRegistration, User
+from backend.knowledge.models import ArticleImageUploadSession, Book, KnowledgeProfile
+from backend.knowledge.tests.test_helpers import make_epub
 
-from .models import CacheEntry
-from .throttles import LoginIPThrottle
+from ..models import CacheEntry
+from ..throttles import LoginIPThrottle
 
 
 @contextmanager
