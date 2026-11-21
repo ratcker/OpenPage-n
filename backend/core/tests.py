@@ -27,9 +27,7 @@ class ReadinessTests(APITestCase):
         self.assertEqual(response.data, {"status": "ok"})
 
     @patch("core.views.connection.cursor", side_effect=OperationalError)
-    def test_returns_service_unavailable_when_database_is_unavailable(
-        self, cursor
-    ):
+    def test_returns_service_unavailable_when_database_is_unavailable(self, cursor):
         response = self.client.get(reverse("ready"))
 
         self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
