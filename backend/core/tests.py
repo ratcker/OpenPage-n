@@ -1,6 +1,8 @@
 import json
+from unittest.mock import patch
 
 from django.contrib.staticfiles import finders
+from django.db import OperationalError
 from django.test import SimpleTestCase
 from django.urls import reverse
 from rest_framework import status
@@ -17,6 +19,23 @@ class HealthTests(APITestCase):
         self.assertEqual(response.data, {"status": "ok"})
 
 
+class ReadinessTests(APITestCase):
+    def test_returns_ok_when_database_is_available(self):
+        response = self.client.get(reverse("ready"))
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {"status": "ok"})
+
+    @patch("core.views.connection.cursor", side_effect=OperationalError)
+    def test_returns_service_unavailable_when_database_is_unavailable(
+        self, cursor
+    ):
+        response = self.client.get(reverse("ready"))
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertEqual(response.data, {"status": "unavailable"})
+
+
 class DocumentationTests(SimpleTestCase):
     def schema(self):
         response = self.client.get(reverse("schema"), {"format": "json"})
@@ -27,6 +46,7 @@ class DocumentationTests(SimpleTestCase):
         schema = self.schema()
         expected_operations = {
             "/api/health/": {"get": "health_check"},
+            "/api/ready/": {"get": "readiness_check"},
             "/api/auth/register/": {"post": "auth_register"},
             "/api/auth/verify-email/": {"post": "auth_verify_email"},
             "/api/auth/login/": {"post": "auth_login"},
