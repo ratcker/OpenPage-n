@@ -187,7 +187,7 @@ func TestRenderBuiltValues(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	manifests, err := manifestgenerator.Render(ctx, chartDir, "sandbox", "project-sandbox", values)
+	manifests, err := manifestgenerator.Render(ctx, chartDir, "sandbox", projectNamespace, values)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -195,8 +195,23 @@ func TestRenderBuiltValues(t *testing.T) {
 	for _, manifest := range manifests {
 		got[manifest.Kind]++
 	}
-	want := map[string]int{"Deployment": 2, "Service": 2, "HTTPRoute": 1}
+	want := map[string]int{"Namespace": 1, "Deployment": 2, "Service": 2, "HTTPRoute": 1}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got resource counts %v, want %v", got, want)
+	}
+}
+
+func TestBuildValuesRejectsPlaintextSecrets(t *testing.T) {
+	const plaintext = "fixture-only-password"
+	for _, value := range []string{plaintext, "Zml4dHVyZS1vbmx5LXBhc3N3b3Jk"} {
+		spec := releaseSpec()
+		spec.SealedSecrets = map[string]manifestgenerator.SealedSecretSpec{
+			"db-credentials": {EncryptedData: map[string]string{"password": value}},
+		}
+		values, err := manifestgenerator.BuildValues(spec)
+		if values != nil || err == nil || !strings.Contains(err.Error(), "expected a Sealed Secrets ciphertext") ||
+			strings.Contains(err.Error(), value) {
+			t.Fatal("expected ciphertext validation to reject the input without revealing it")
+		}
 	}
 }

@@ -2,3 +2,4 @@ project: {}
 services: {}
 routes: []
 gateway: {}
+sealedSecrets: {}

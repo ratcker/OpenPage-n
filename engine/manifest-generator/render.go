@@ -75,8 +75,11 @@ func splitManifests(output []byte) ([]Manifest, error) {
 		if err := yaml.Unmarshal(doc, &header); err != nil {
 			return nil, fmt.Errorf("read rendered manifest %d: %w", i+1, err)
 		}
-		if header.APIVersion == "" || header.Kind == "" || header.Metadata.Name == "" || header.Metadata.Namespace == "" {
-			return nil, fmt.Errorf("rendered manifest %d lacks apiVersion, kind, metadata.name or metadata.namespace", i+1)
+		if header.APIVersion == "" || header.Kind == "" || header.Metadata.Name == "" {
+			return nil, fmt.Errorf("rendered manifest %d lacks apiVersion, kind or metadata.name", i+1)
+		}
+		if header.Kind != "Namespace" && header.Metadata.Namespace == "" {
+			return nil, fmt.Errorf("rendered manifest %d lacks metadata.namespace", i+1)
 		}
 		content := string(doc)
 		if i < len(docs)-1 {

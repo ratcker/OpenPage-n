@@ -71,11 +71,18 @@ func saveManifests(dir string, manifests []manifestgenerator.Manifest) error {
 func manifestFilename(manifest manifestgenerator.Manifest) (string, error) {
 	api := strings.SplitN(manifest.APIVersion, "/", 2)
 	parts := append([]string{strings.ToLower(manifest.Kind)}, api...)
-	parts = append(parts, manifest.Namespace, manifest.Name)
+	if manifest.Namespace != "" {
+		parts = append(parts, manifest.Namespace)
+	}
+	parts = append(parts, manifest.Name)
 	for _, part := range parts {
 		if !filenamePart.MatchString(part) {
 			return "", fmt.Errorf("invalid filename component %q for %s/%s", part, manifest.Kind, manifest.Name)
 		}
 	}
-	return strings.Join(parts, "_") + ".yaml", nil
+	name := strings.Join(parts, "_") + ".yaml"
+	if manifest.Kind == "Namespace" {
+		name = "00_" + name
+	}
+	return name, nil
 }

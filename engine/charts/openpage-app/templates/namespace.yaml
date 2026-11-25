@@ -1,0 +1,11 @@
+{{- $name := printf "openpage-%s" (.Values.project.id | lower) }}
+{{- if ne .Release.Namespace $name }}
+  {{- fail (printf "release namespace must be %q" $name) }}
+{{- end }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $name | quote }}
+  labels:
+    openpage/project-id: {{ .Values.project.id | lower | quote }}
+    pod-security.kubernetes.io/enforce: restricted

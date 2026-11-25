@@ -16,6 +16,7 @@ import (
 )
 
 const chartDir = "../../charts/openpage-app"
+const projectNamespace = "openpage-0812951a-c377-4045-8c09-83595bd5222d"
 
 func TestRender(t *testing.T) {
 	if _, err := exec.LookPath("helm"); err != nil {
@@ -29,17 +30,18 @@ func TestRender(t *testing.T) {
 	defer cancel()
 
 	const release = "sandbox"
-	const namespace = "project-sandbox"
+	const namespace = projectNamespace
 	got, err := manifestgenerator.Render(ctx, chartDir, release, namespace, values)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := []struct{ version, kind, name, spec string }{
-		{"apps/v1", "Deployment", "backend-2d5a602407eb", "replicas: 1"},
-		{"apps/v1", "Deployment", "frontend-8335043597c8", "replicas: 2"},
-		{"gateway.networking.k8s.io/v1", "HTTPRoute", "openpage-0812951a-c377-4045-8c09-83595bd5222d", `value: "/api"`},
-		{"v1", "Service", "backend-2d5a602407eb", "port: 8000"},
-		{"v1", "Service", "frontend-8335043597c8", "port: 80"},
+	want := []struct{ version, kind, name, namespace, spec string }{
+		{"apps/v1", "Deployment", "backend-2d5a602407eb", namespace, "replicas: 1"},
+		{"apps/v1", "Deployment", "frontend-8335043597c8", namespace, "replicas: 2"},
+		{"gateway.networking.k8s.io/v1", "HTTPRoute", namespace, namespace, `value: "/api"`},
+		{"v1", "Namespace", namespace, "", "pod-security.kubernetes.io/enforce: restricted"},
+		{"v1", "Service", "backend-2d5a602407eb", namespace, "port: 8000"},
+		{"v1", "Service", "frontend-8335043597c8", namespace, "port: 80"},
 	}
 	if len(got) != len(want) {
 		t.Fatalf("got %d manifests, want %d", len(got), len(want))
@@ -47,10 +49,10 @@ func TestRender(t *testing.T) {
 	for i, manifest := range got {
 		expected := want[i]
 		if manifest.APIVersion != expected.version || manifest.Kind != expected.kind ||
-			manifest.Name != expected.name || manifest.Namespace != namespace {
+			manifest.Name != expected.name || manifest.Namespace != expected.namespace {
 			t.Errorf("resource %d: got %s %s %s/%s, want %s %s %s/%s",
 				i, manifest.APIVersion, manifest.Kind, manifest.Namespace, manifest.Name,
-				expected.version, expected.kind, namespace, expected.name)
+				expected.version, expected.kind, expected.namespace, expected.name)
 		}
 		if !strings.Contains(manifest.Content, expected.spec) || strings.Contains(manifest.Content, "\n---\n") {
 			t.Errorf("resource %s/%s has unexpected YAML:\n%s", manifest.Kind, manifest.Name, manifest.Content)

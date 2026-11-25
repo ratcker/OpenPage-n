@@ -45,11 +45,20 @@ spec:
           ports:
             - containerPort: {{ . }}
           {{- end }}
-          {{- with $service.env }}
+          {{- if or $service.env $service.secretEnv }}
           env:
-            {{- range $key, $value := . }}
+            {{- range $key, $value := $service.env }}
             - name: {{ $key | quote }}
               value: {{ $value | quote }}
+            {{- end }}
+            {{- range $key, $ref := $service.secretEnv }}
+            {{- if hasKey ($service.env | default dict) $key }}
+              {{- fail (printf "service %q defines %q in both env and secretEnv" $name $key) }}
+            {{- end }}
+            - name: {{ $key | quote }}
+              valueFrom:
+                secretKeyRef:
+                  {{- include "openpage-app.secretKeyRef" (dict "secrets" $.Values.sealedSecrets "ref" $ref) | nindent 18 }}
             {{- end }}
           {{- end }}
           {{- with $service.readinessProbe }}

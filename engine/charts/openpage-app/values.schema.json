@@ -73,6 +73,29 @@
           "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$"
         }
       }
+    },
+    "postgresql": {"$ref": "#/definitions/postgresql"},
+    "sealedSecrets": {
+      "type": "object",
+      "description": "Sealed Secrets encrypted for the project namespace and the named Secret using strict scope.",
+      "propertyNames": {"$ref": "#/definitions/secretName"},
+      "additionalProperties": {
+        "type": "object",
+        "required": ["encryptedData"],
+        "additionalProperties": false,
+        "properties": {
+          "encryptedData": {
+            "type": "object",
+            "minProperties": 1,
+            "propertyNames": {"$ref": "#/definitions/secretKey"},
+            "additionalProperties": {
+              "type": "string",
+              "minLength": 196,
+              "pattern": "^([A-Za-z0-9+/]{4})*([A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$"
+            }
+          }
+        }
+      }
     }
   },
   "if": {"properties": {"routes": {"minItems": 1}}},
@@ -102,16 +125,66 @@
         "memory": {"$ref": "#/definitions/quantity"}
       }
     },
+    "resources": {
+      "type": "object",
+      "required": ["requests", "limits"],
+      "additionalProperties": false,
+      "properties": {
+        "requests": {"$ref": "#/definitions/resourceList"},
+        "limits": {"$ref": "#/definitions/resourceList"}
+      }
+    },
+    "image": {
+      "type": "string",
+      "description": "Fully qualified OCI image reference pinned by the release digest.",
+      "pattern": "^((([a-zA-Z0-9-]+\\.)+[a-zA-Z0-9-]+|localhost)(:[0-9]+)?|[a-zA-Z0-9-]+:[0-9]+|\\[[0-9a-fA-F:]+\\](:[0-9]+)?)(/[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*)+(:[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127})?@(sha256:[0-9a-f]{64}|sha384:[0-9a-f]{96}|sha512:[0-9a-f]{128})$"
+    },
+    "envName": {"pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"},
+    "secretName": {
+      "allOf": [
+        {"$ref": "#/definitions/dnsName"},
+        {"maxLength": 63}
+      ]
+    },
+    "secretKey": {"type": "string", "maxLength": 253, "pattern": "^[A-Za-z0-9._-]+$", "not": {"pattern": "^(\\.|\\.\\..*)$"}},
+    "secretKeyRef": {
+      "type": "object",
+      "required": ["name", "key"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {"$ref": "#/definitions/secretName"},
+        "key": {"$ref": "#/definitions/secretKey"}
+      }
+    },
+    "postgresql": {
+      "type": "object",
+      "required": ["image", "database", "user", "passwordSecretKeyRef", "storageSize", "storageClass", "resources"],
+      "additionalProperties": false,
+      "properties": {
+        "image": {
+          "description": "PostgreSQL image with the official entrypoint contract and support for UID/GID 70, such as postgres:17-alpine.",
+          "allOf": [{"$ref": "#/definitions/image"}]
+        },
+        "database": {"$ref": "#/definitions/postgresIdentifier"},
+        "user": {"$ref": "#/definitions/postgresIdentifier"},
+        "passwordSecretKeyRef": {"$ref": "#/definitions/secretKeyRef"},
+        "storageSize": {
+          "allOf": [
+            {"$ref": "#/definitions/quantity"},
+            {"pattern": "^[0-9]*[1-9]|^[0-9]*\\.[0-9]*[1-9]"}
+          ]
+        },
+        "storageClass": {"$ref": "#/definitions/dnsName"},
+        "resources": {"$ref": "#/definitions/resources"}
+      }
+    },
+    "postgresIdentifier": {"type": "string", "minLength": 1, "maxLength": 63, "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]*$"},
     "service": {
       "type": "object",
       "required": ["image", "replicas", "resources"],
       "additionalProperties": false,
       "properties": {
-        "image": {
-          "type": "string",
-          "description": "Fully qualified OCI image reference pinned by the release digest.",
-          "pattern": "^((([a-zA-Z0-9-]+\\.)+[a-zA-Z0-9-]+|localhost)(:[0-9]+)?|[a-zA-Z0-9-]+:[0-9]+|\\[[0-9a-fA-F:]+\\](:[0-9]+)?)(/[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*)+(:[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127})?@(sha256:[0-9a-f]{64}|sha384:[0-9a-f]{96}|sha512:[0-9a-f]{128})$"
-        },
+        "image": {"$ref": "#/definitions/image"},
         "replicas": {
           "type": "integer",
           "description": "Desired replica count. Zero suspends the service while retaining its configuration.",
@@ -122,20 +195,17 @@
           "description": "Declared container port. When set, the chart creates a ClusterIP Service.",
           "allOf": [{"$ref": "#/definitions/port"}]
         },
-        "resources": {
-          "type": "object",
-          "required": ["requests", "limits"],
-          "additionalProperties": false,
-          "properties": {
-            "requests": {"$ref": "#/definitions/resourceList"},
-            "limits": {"$ref": "#/definitions/resourceList"}
-          }
-        },
+        "resources": {"$ref": "#/definitions/resources"},
         "env": {
           "type": "object",
           "description": "Plaintext environment variables. Secret values must never be placed here.",
-          "propertyNames": {"pattern": "^[a-zA-Z_][a-zA-Z0-9_]*$"},
+          "propertyNames": {"$ref": "#/definitions/envName"},
           "additionalProperties": {"type": "string"}
+        },
+        "secretEnv": {
+          "type": "object",
+          "propertyNames": {"$ref": "#/definitions/envName"},
+          "additionalProperties": {"$ref": "#/definitions/secretKeyRef"}
         },
         "readinessProbe": {"$ref": "#/definitions/readinessProbe"}
       }

@@ -1,6 +1,8 @@
 package manifestgenerator
 
 import (
+	"encoding/base64"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"slices"
@@ -10,10 +12,12 @@ import (
 )
 
 type ReleaseSpec struct {
-	Project  ProjectSpec            `yaml:"project"`
-	Services map[string]ServiceSpec `yaml:"services"`
-	Routes   []RouteSpec            `yaml:"routes"`
-	Gateway  GatewaySpec            `yaml:"gateway"`
+	Project       ProjectSpec                 `yaml:"project"`
+	Services      map[string]ServiceSpec      `yaml:"services"`
+	Routes        []RouteSpec                 `yaml:"routes"`
+	Gateway       GatewaySpec                 `yaml:"gateway"`
+	PostgreSQL    *PostgreSQLSpec             `yaml:"postgresql,omitempty"`
+	SealedSecrets map[string]SealedSecretSpec `yaml:"sealedSecrets,omitempty"`
 }
 
 type ProjectSpec struct {
@@ -24,12 +28,32 @@ type ProjectSpec struct {
 }
 
 type ServiceSpec struct {
-	Image          string            `yaml:"image"`
-	Replicas       int               `yaml:"replicas"`
-	Port           *int              `yaml:"port,omitempty"`
-	Resources      Resources         `yaml:"resources"`
-	Env            map[string]string `yaml:"env,omitempty"`
-	ReadinessProbe *ReadinessProbe   `yaml:"readinessProbe,omitempty"`
+	Image          string                  `yaml:"image"`
+	Replicas       int                     `yaml:"replicas"`
+	Port           *int                    `yaml:"port,omitempty"`
+	Resources      Resources               `yaml:"resources"`
+	Env            map[string]string       `yaml:"env,omitempty"`
+	SecretEnv      map[string]SecretKeyRef `yaml:"secretEnv,omitempty"`
+	ReadinessProbe *ReadinessProbe         `yaml:"readinessProbe,omitempty"`
+}
+
+type PostgreSQLSpec struct {
+	Image                string       `yaml:"image"`
+	Database             string       `yaml:"database"`
+	User                 string       `yaml:"user"`
+	PasswordSecretKeyRef SecretKeyRef `yaml:"passwordSecretKeyRef"`
+	StorageSize          string       `yaml:"storageSize"`
+	StorageClass         string       `yaml:"storageClass"`
+	Resources            Resources    `yaml:"resources"`
+}
+
+type SealedSecretSpec struct {
+	EncryptedData map[string]string `yaml:"encryptedData"`
+}
+
+type SecretKeyRef struct {
+	Name string `yaml:"name"`
+	Key  string `yaml:"key"`
 }
 
 type Resources struct {
@@ -130,6 +154,26 @@ func BuildValues(spec ReleaseSpec) ([]byte, error) {
 	if len(spec.Routes) != 0 && (strings.TrimSpace(spec.Gateway.Name) == "" || strings.TrimSpace(spec.Gateway.Namespace) == "") {
 		return nil, errors.New("gateway.name and gateway.namespace are required when routes are present")
 	}
+	for name, secret := range spec.SealedSecrets {
+		if len(secret.EncryptedData) == 0 {
+			return nil, fmt.Errorf("sealed secret %q: encryptedData is required", name)
+		}
+		for key, value := range secret.EncryptedData {
+			if !isSealedValue(value) {
+				return nil, fmt.Errorf("sealed secret %q key %q: expected a Sealed Secrets ciphertext", name, key)
+			}
+		}
+	}
 
 	return yaml.Marshal(spec)
+}
+
+func isSealedValue(value string) bool {
+	data, err := base64.StdEncoding.Strict().DecodeString(value)
+	if err != nil || len(data) < 2 {
+		return false
+	}
+	// Sealed Secrets prefixes the RSA-wrapped key with its length and appends a GCM tag.
+	keySize := int(binary.BigEndian.Uint16(data))
+	return keySize >= 128 && len(data) >= 2+keySize+16
 }

@@ -1,0 +1,53 @@
+project:
+  id: 0812951a-c377-4045-8c09-83595bd5222d
+  hostname: sandbox.xn--e1aamodgc0e.xn--p1ai
+  sourceSHA: "0123456789abcdef0123456789abcdef01234567"
+  configRevision: "revision-1"
+
+services:
+  frontend:
+    image: ghcr.io/example/frontend@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    replicas: 2
+    port: 80
+    resources:
+      requests: {cpu: "100m", memory: "64Mi"}
+      limits: {cpu: "250m", memory: "128Mi"}
+    env:
+      API_PATH: /api
+  backend:
+    image: ghcr.io/example/backend@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    replicas: 1
+    port: 8000
+    resources:
+      requests: {cpu: "200m", memory: "128Mi"}
+      limits: {cpu: "500m", memory: "256Mi"}
+    env:
+      DB_HOST: postgresql
+      DB_NAME: app
+      DB_USER: app
+    secretEnv:
+      DB_PASSWORD: {name: db-credentials, key: password}
+
+routes:
+  - {path: /, service: frontend}
+  - {path: /api, service: backend}
+
+gateway:
+  name: public
+  namespace: envoy-gateway-system
+
+postgresql:
+  image: docker.io/library/postgres:17-alpine@sha256:f9cf3e1f0066f0eb0c48707d864f0ac5941e9ff454a072077d97a4d278d07d73
+  database: app
+  user: app
+  passwordSecretKeyRef: {name: db-credentials, key: password}
+  storageSize: 2Gi
+  storageClass: longhorn
+  resources:
+    requests: {cpu: "100m", memory: "128Mi"}
+    limits: {cpu: "500m", memory: "512Mi"}
+
+sealedSecrets:
+  db-credentials:
+    encryptedData:
+      password: AQCxwiPWM895TLJCIsm46xkLvTZ7N4nBhx16DwEjNCkHC61mFiOavW0PPD8bpo3FpuQ3eJNMFvuzBanTrtZ9SLb9wDSvnsjNWyVQ5r60KU3ZpeieccnAceXPa3os0mE1HcTeaX/R+T+RP2chGHDrF91CNWm5E0aPgfpIhuwrcQInCH0Lgl5XY2BM3+f9c0rAy5ICqtY2TiTLmBZfFC5UrNOn5Ddi6RqiiGzcj3y7AY+ySecf8OvktzfzKJccWLm2OY3R2KQPPNd/RxkSwJ5bSFfSeQmpGwi0W2OYjQp99ZeN+rAeIqS0/C7lUKCorAO64zVOhR++U05C/reixhQUVeUjVT9zB7hoP27gZvAsiI5Y5OfPlrpUDQJVBjaD0MI9n4VmrifGgQ==

@@ -7,3 +7,12 @@
 app.kubernetes.io/name: {{ .service | quote }}
 openpage/project-id: {{ .projectID | lower | quote }}
 {{- end -}}
+
+{{- define "openpage-app.secretKeyRef" -}}
+{{- $secret := get .secrets .ref.name | default dict -}}
+{{- if not (hasKey ($secret.encryptedData | default dict) .ref.key) -}}
+  {{- fail (printf "secretKeyRef %q requires key %q in sealedSecrets" .ref.name .ref.key) -}}
+{{- end -}}
+name: {{ .ref.name | quote }}
+key: {{ .ref.key | quote }}
+{{- end -}}

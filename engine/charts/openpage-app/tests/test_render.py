@@ -18,8 +18,9 @@ class TestRender(unittest.TestCase):
         self.values = yaml.safe_load((CHART / "tests/values-two-services.yaml").read_text())
 
     def helm(self, values):
+        namespace = "openpage-" + values["project"]["id"].lower()
         return subprocess.run(
-            [HELM, "template", "sandbox", str(CHART), "--namespace", "sandbox", "-f", "-"],
+            [HELM, "template", "sandbox", str(CHART), "--namespace", namespace, "-f", "-"],
             input=json.dumps(values),
             text=True,
             capture_output=True,
@@ -34,9 +35,16 @@ class TestRender(unittest.TestCase):
         docs = self.render(self.values)
         self.assertCountEqual(
             [doc["kind"] for doc in docs],
-            ["Deployment", "Deployment", "Service", "Service", "HTTPRoute"],
+            ["Namespace", "Deployment", "Deployment", "Service", "Service", "HTTPRoute"],
         )
-        self.assertTrue(all(doc["metadata"]["namespace"] == "sandbox" for doc in docs))
+        namespace, = (doc["metadata"] for doc in docs if doc["kind"] == "Namespace")
+        self.assertEqual(namespace["name"], "openpage-" + self.values["project"]["id"])
+        self.assertEqual(namespace["labels"]["pod-security.kubernetes.io/enforce"], "restricted")
+        self.assertNotIn("namespace", namespace)
+        self.assertTrue(all(
+            doc["metadata"]["namespace"] == namespace["name"]
+            for doc in docs if doc["kind"] != "Namespace"
+        ))
         services = {doc["metadata"]["name"]: doc["spec"] for doc in docs if doc["kind"] == "Service"}
         backend_names = {}
         for doc in docs:
@@ -102,7 +110,7 @@ class TestRender(unittest.TestCase):
         self.values["routes"] = []
         self.values["gateway"] = {}
         docs = self.render(self.values)
-        self.assertCountEqual([doc["kind"] for doc in docs], ["Deployment", "Deployment", "Service"])
+        self.assertCountEqual([doc["kind"] for doc in docs], ["Namespace", "Deployment", "Deployment", "Service"])
         deployments = [doc for doc in docs if doc["kind"] == "Deployment"]
         self.assertCountEqual([doc["spec"]["replicas"] for doc in deployments], [0, 1])
         names = [doc["metadata"]["name"] for doc in deployments]
@@ -124,6 +132,77 @@ class TestRender(unittest.TestCase):
         self.values["services"]["backend"]["port"] = 8000
         self.values["routes"].append({"path": "/api/", "service": "backend"})
         self.assertIn("duplicate route path prefix", self.helm(self.values).stderr)
+
+    def test_stateful_release(self):
+        values = yaml.safe_load((CHART / "tests/values-stateful.yaml").read_text())
+        docs = self.render(values)
+        self.assertCountEqual(
+            [doc["kind"] for doc in docs],
+            ["Namespace", "Deployment", "Deployment", "StatefulSet", "Service", "Service",
+             "Service", "PersistentVolumeClaim", "HTTPRoute", "SealedSecret"],
+        )
+        namespace, = (doc["metadata"]["name"] for doc in docs if doc["kind"] == "Namespace")
+        self.assertTrue(all(
+            doc["metadata"]["namespace"] == namespace for doc in docs if doc["kind"] != "Namespace"
+        ))
+        statefulset, = (doc["spec"] for doc in docs if doc["kind"] == "StatefulSet")
+        service, = (doc["spec"] for doc in docs
+                    if doc["kind"] == "Service" and doc["metadata"]["name"] == statefulset["serviceName"])
+        pvc, = (doc for doc in docs if doc["kind"] == "PersistentVolumeClaim")
+        pod = statefulset["template"]["spec"]
+        db, = pod["containers"]
+        db_values = values["postgresql"]
+
+        self.assertEqual(statefulset["replicas"], 1)
+        self.assertEqual(service["clusterIP"], "None")
+        self.assertEqual(service["selector"], statefulset["selector"]["matchLabels"])
+        self.assertEqual(service["selector"], statefulset["template"]["metadata"]["labels"])
+        self.assertNotIn("app.kubernetes.io/name", service["selector"])
+        self.assertEqual(pod["volumes"], [
+            {"name": "data", "persistentVolumeClaim": {"claimName": pvc["metadata"]["name"]}},
+        ])
+        self.assertEqual(db["volumeMounts"], [{"name": "data", "mountPath": "/var/lib/postgresql/data"}])
+        self.assertEqual(pvc["spec"]["storageClassName"], db_values["storageClass"])
+        self.assertEqual(pvc["spec"]["resources"]["requests"]["storage"], db_values["storageSize"])
+        self.assertEqual(db["image"], db_values["image"])
+        self.assertEqual(db["resources"], db_values["resources"])
+        self.assertTrue(pod["securityContext"]["runAsNonRoot"])
+        self.assertEqual(pod["securityContext"]["runAsUser"], 70)
+        self.assertEqual(pod["securityContext"]["fsGroup"], 70)
+        self.assertFalse(db["securityContext"]["allowPrivilegeEscalation"])
+        self.assertEqual(db["securityContext"]["capabilities"]["drop"], ["ALL"])
+
+        secret, = (doc for doc in docs if doc["kind"] == "SealedSecret")
+        self.assertEqual(secret["spec"]["template"]["metadata"], secret["metadata"])
+        self.assertEqual(secret["spec"]["encryptedData"], values["sealedSecrets"]["db-credentials"]["encryptedData"])
+        ref = {"secretKeyRef": {"name": secret["metadata"]["name"], "key": "password"}}
+        self.assertIn({"name": "POSTGRES_PASSWORD", "valueFrom": ref}, db["env"])
+        backend, = (container for doc in docs if doc["kind"] == "Deployment"
+                    for container in doc["spec"]["template"]["spec"]["containers"]
+                    if container["name"] == "backend")
+        self.assertIn({"name": "DB_PASSWORD", "valueFrom": ref}, backend["env"])
+        self.assertIn({"name": "DB_HOST", "value": "postgresql"}, backend["env"])
+        route, = (doc["spec"] for doc in docs if doc["kind"] == "HTTPRoute")
+        self.assertTrue(all(rule["backendRefs"][0]["name"] != statefulset["serviceName"] for rule in route["rules"]))
+        self.assertNotIn("fixture-only-password", yaml.safe_dump(docs))
+
+    def test_invalid_stateful_release(self):
+        values = yaml.safe_load((CHART / "tests/values-stateful.yaml").read_text())
+        invalid = deepcopy(values)
+        invalid["postgresql"]["storageSize"] = "0Gi"
+        self.assertNotEqual(self.helm(invalid).returncode, 0)
+
+        invalid = deepcopy(values)
+        invalid["sealedSecrets"]["db-credentials"]["encryptedData"]["password"] = "plaintext"
+        self.assertNotEqual(self.helm(invalid).returncode, 0)
+
+        invalid = deepcopy(values)
+        invalid["postgresql"]["passwordSecretKeyRef"]["key"] = "missing"
+        self.assertIn('requires key "missing"', self.helm(invalid).stderr)
+
+        invalid = deepcopy(values)
+        invalid["services"]["backend"]["env"]["DB_PASSWORD"] = "plaintext"
+        self.assertIn("in both env and secretEnv", self.helm(invalid).stderr)
 
     def test_invalid_values(self):
         for key, invalid in [
