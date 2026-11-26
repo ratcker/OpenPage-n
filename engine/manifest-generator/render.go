@@ -10,17 +10,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"slices"
-
-	"gopkg.in/yaml.v3"
 )
-
-type Manifest struct {
-	APIVersion string
-	Kind       string
-	Namespace  string
-	Name       string
-	Content    string
-}
 
 // Render рендерит локальный chart по подготовленным values в формате YAML или JSON.
 func Render(ctx context.Context, chartDir, release, namespace string, values []byte) ([]Manifest, error) {
@@ -64,34 +54,15 @@ func splitManifests(output []byte) ([]Manifest, error) {
 		if len(bytes.TrimSpace(doc)) == 0 {
 			continue
 		}
-		var header struct {
-			APIVersion string `yaml:"apiVersion"`
-			Kind       string
-			Metadata   struct {
-				Namespace string
-				Name      string
-			}
-		}
-		if err := yaml.Unmarshal(doc, &header); err != nil {
-			return nil, fmt.Errorf("read rendered manifest %d: %w", i+1, err)
-		}
-		if header.APIVersion == "" || header.Kind == "" || header.Metadata.Name == "" {
-			return nil, fmt.Errorf("rendered manifest %d lacks apiVersion, kind or metadata.name", i+1)
-		}
-		if header.Kind != "Namespace" && header.Metadata.Namespace == "" {
-			return nil, fmt.Errorf("rendered manifest %d lacks metadata.namespace", i+1)
-		}
 		content := string(doc)
 		if i < len(docs)-1 {
 			content += "\n"
 		}
-		manifests = append(manifests, Manifest{
-			APIVersion: header.APIVersion,
-			Kind:       header.Kind,
-			Namespace:  header.Metadata.Namespace,
-			Name:       header.Metadata.Name,
-			Content:    content,
-		})
+		manifest, err := ParseManifest(content)
+		if err != nil {
+			return nil, fmt.Errorf("read rendered manifest %d: %w", i+1, err)
+		}
+		manifests = append(manifests, manifest)
 	}
 	slices.SortFunc(manifests, func(a, b Manifest) int {
 		return cmp.Or(cmp.Compare(a.Kind, b.Kind), cmp.Compare(a.Namespace, b.Namespace), cmp.Compare(a.Name, b.Name))

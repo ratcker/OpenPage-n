@@ -5,13 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
 
 	"github.com/ratcker/OpenPage-n/engine/manifest-generator"
 )
-
-var filenamePart = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9.-]*$`)
 
 func saveManifests(dir string, manifests []manifestgenerator.Manifest) error {
 	work, err := os.MkdirTemp(dir, ".manifests-")
@@ -27,7 +23,7 @@ func saveManifests(dir string, manifests []manifestgenerator.Manifest) error {
 	defer os.RemoveAll(next)
 	names := make(map[string]bool, len(manifests))
 	for _, manifest := range manifests {
-		name, err := manifestFilename(manifest)
+		name, err := manifestgenerator.ManifestFilename(manifest)
 		if err != nil {
 			return err
 		}
@@ -66,23 +62,4 @@ func saveManifests(dir string, manifests []manifestgenerator.Manifest) error {
 		return fmt.Errorf("installed new manifests but could not remove previous files: %w", err)
 	}
 	return nil
-}
-
-func manifestFilename(manifest manifestgenerator.Manifest) (string, error) {
-	api := strings.SplitN(manifest.APIVersion, "/", 2)
-	parts := append([]string{strings.ToLower(manifest.Kind)}, api...)
-	if manifest.Namespace != "" {
-		parts = append(parts, manifest.Namespace)
-	}
-	parts = append(parts, manifest.Name)
-	for _, part := range parts {
-		if !filenamePart.MatchString(part) {
-			return "", fmt.Errorf("invalid filename component %q for %s/%s", part, manifest.Kind, manifest.Name)
-		}
-	}
-	name := strings.Join(parts, "_") + ".yaml"
-	if manifest.Kind == "Namespace" {
-		name = "00_" + name
-	}
-	return name, nil
 }
