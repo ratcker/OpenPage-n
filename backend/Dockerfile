@@ -15,7 +15,11 @@ CMD ["sh", "-c", "python manage.py migrate && python manage.py runserver 0.0.0.0
 
 #stage image - prod-version
 FROM base AS production
-RUN mkdir -p /app/staticfiles && chown -R app:app /app/staticfiles #переназначаем владельца для работы с static-django
+RUN install -d -m 0755 -o app -g app /app/staticfiles
 USER app
+# Эти значения действуют только во время сборки статики.
+RUN DJANGO_DEBUG=False DJANGO_SECRET_KEY=collectstatic-build-only \
+    DJANGO_DATABASE_ENGINE=sqlite3 S3_ENDPOINT_URL= \
+    python manage.py collectstatic --noinput
 EXPOSE 8000
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "2"]
