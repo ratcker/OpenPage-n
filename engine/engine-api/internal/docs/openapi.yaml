@@ -2,14 +2,16 @@ openapi: 3.1.0
 info:
   title: ОпенПейч Engine API
   version: 1.0.0
-  description: Внутренний API регистрации проектов и наблюдений за HEAD ветки openpage.
+  description: Внутренний API конфигурации проектов, наблюдений за HEAD ветки openpage и очереди сборок.
 servers:
   - url: /
 tags:
   - name: Регистрация проектов
-    description: Регистрация технических проектов.
+    description: Регистрация и изменение конфигурации проектов.
   - name: Наблюдения за исходниками
     description: Получение активных проектов и отправка наблюдений за веткой.
+  - name: Сборки
+    description: Получение заданий и запись результатов CI.
 paths:
   /internal/v1/projects:
     post:
@@ -18,7 +20,8 @@ paths:
       summary: Зарегистрировать технический проект
       description: >
         UUID выдаёт платформа ОпенПейч. При повторной регистрации API сравнивает repo_url
-        и enabled с сохранённой конфигурацией. URL проверяется синтаксически.
+        и enabled, а также нормализованную конфигурацию с текущими значениями.
+        Начальная ревизия конфигурации равна 1. URL проверяется синтаксически.
       security:
         - PlatformBearer: []
       requestBody:
@@ -29,24 +32,20 @@ paths:
               $ref: '#/components/schemas/ProjectRegistration'
             example:
               id: 0812951a-c377-4045-8c09-83595bd5222d
-              repo_url: https://github.com/ratcker/openpage-sandbox.git
+              repo_url: https://git.example.org/team/app.git
+              config:
+                hostname: demo.example.org
+                services:
+                  frontend: {dockerfile: web/Dockerfile}
       responses:
         '200':
-          $ref: '#/components/responses/ProjectState'
+          $ref: '#/components/responses/ConfiguredProjectState'
           description: Проект с такой конфигурацией уже существует.
         '201':
+          $ref: '#/components/responses/ConfiguredProjectState'
           description: Проект создан.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Project'
-              example:
-                id: 0812951a-c377-4045-8c09-83595bd5222d
-                repo_url: https://github.com/ratcker/openpage-sandbox.git
-                observed_sha: null
-                observed_revision: 0
         '400':
-          description: Некорректный JSON, UUID или URL репозитория.
+          description: Некорректный JSON, UUID, URL репозитория или конфигурация.
           content:
             application/json:
               schema:
@@ -58,6 +57,49 @@ paths:
                   value: {error: id must be a UUID and repo_url must be a public HTTPS URL}
         '401':
           $ref: '#/components/responses/Unauthorized'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+        '503':
+          $ref: '#/components/responses/DatabaseTimeout'
+  /internal/v1/projects/{id}/config:
+    put:
+      tags: [Регистрация проектов]
+      operationId: updateProjectConfig
+      summary: Заменить конфигурацию проекта
+      description: >
+        previous_revision сравнивается с текущей config_revision. При изменении конфигурации
+        ревизия увеличивается. Равная нормализованная конфигурация сохраняет ревизию.
+        UUID, repo_url и hostname неизменяемы.
+        У старых проектов с ревизией 0 hostname устанавливается при первом обновлении.
+        Обновление не создаёт сборок и не меняет состояния или снимки существующих сборок.
+        Новая конфигурация используется при следующем изменении SHA ветки openpage.
+      security:
+        - PlatformBearer: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProjectConfigUpdate'
+            example:
+              previous_revision: 1
+              config:
+                hostname: demo.example.org
+                services:
+                  frontend: {dockerfile: web/Dockerfile, port: 3000}
+      responses:
+        '200':
+          $ref: '#/components/responses/ConfiguredProjectState'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/ProjectNotFound'
         '409':
           $ref: '#/components/responses/Conflict'
         '500':
@@ -99,6 +141,9 @@ paths:
       summary: Сообщить о наблюдении HEAD ветки openpage
       description: >
         При изменении SHA увеличивает ревизию и записывает событие в той же транзакции.
+        Для проекта с конфигурацией помечает прежние pending-сборки как superseded и
+        сохраняет новую pending-сборку со снимком конфигурации. Running-сборки продолжаются.
+        Проект с ревизией конфигурации 0 сохраняет наблюдения до получения конфигурации.
         Совпадающий HEAD и точный повтор перехода к текущей ревизии возвращают 200
         без нового события. Устаревшее состояние, включая возврат HEAD к прежнему SHA
         после нескольких изменений, возвращает 409.
@@ -163,7 +208,120 @@ paths:
           $ref: '#/components/responses/DatabaseError'
         '503':
           $ref: '#/components/responses/DatabaseTimeout'
+  /internal/v1/ci/builds/claim:
+    post:
+      tags: [Сборки]
+      operationId: claimBuild
+      summary: Забрать следующую актуальную сборку
+      description: >
+        Атомарно переводит в running самую раннюю доступную pending-сборку активного
+        проекта для текущего HEAD. Сборка использует исходный снимок конфигурации
+        даже после обновления конфигурации проекта. Одновременно в Engine может быть
+        только одна running-сборка.
+      security:
+        - CIBearer: []
+      responses:
+        '200':
+          description: Сборка получена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClaimedBuild'
+              example:
+                id: b67a7810-ccbc-4ed0-85d5-bd89b10d3bc8
+                source_event_id: 34236f20-454e-48f1-8d4e-9d8797312804
+                project_id: 0812951a-c377-4045-8c09-83595bd5222d
+                repo_url: https://git.example.org/team/app.git
+                sha: aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+                status: running
+                config_revision: 1
+                config_snapshot:
+                  hostname: demo.example.org
+                  services:
+                    frontend: {dockerfile: web/Dockerfile, context: web, port: 80}
+                  postgresql: {enabled: false}
+                  env: {}
+                  secrets: {}
+        '204':
+          description: Актуальных ожидающих сборок нет или одна сборка уже выполняется.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+        '503':
+          $ref: '#/components/responses/DatabaseTimeout'
+  /internal/v1/ci/builds/{id}:
+    patch:
+      tags: [Сборки]
+      operationId: updateBuild
+      summary: Записать PipelineRun или результат сборки
+      description: >
+        Имя PipelineRun присваивается один раз. Running-сборку можно завершить со статусом
+        succeeded или failed, даже если HEAD или конфигурация проекта уже изменились.
+        При успехе требуются полные digest-ссылки всех и только сервисов из снимка.
+        Повтор уже записанного обновления возвращает то же состояние.
+      security:
+        - CIBearer: []
+      parameters:
+        - $ref: '#/components/parameters/ID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BuildPatch'
+            examples:
+              register:
+                value: {pipeline_run: app-build-1}
+              succeeded:
+                value:
+                  status: succeeded
+                  image_digests:
+                    frontend: ghcr.io/example/frontend@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+              failed:
+                value: {status: failed}
+      responses:
+        '200':
+          description: Текущее состояние сборки.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BuildState'
+              example:
+                id: b67a7810-ccbc-4ed0-85d5-bd89b10d3bc8
+                status: running
+                pipeline_run: app-build-1
+                image_digests: null
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          description: Сборка с таким UUID не найдена.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example: {error: build not found}
+        '409':
+          description: Переход состояния или изменение имени PipelineRun невозможно.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              example: {error: build state or pipeline_run conflicts}
+        '500':
+          $ref: '#/components/responses/DatabaseError'
+        '503':
+          $ref: '#/components/responses/DatabaseTimeout'
 components:
+  parameters:
+    ID:
+      name: id
+      in: path
+      required: true
+      schema:
+        $ref: '#/components/schemas/UUID'
   securitySchemes:
     PlatformBearer:
       type: http
@@ -173,11 +331,17 @@ components:
       type: http
       scheme: bearer
       description: Значение ENGINE_WATCHER_TOKEN без префикса Bearer.
+    CIBearer:
+      type: http
+      scheme: bearer
+      description: Значение ENGINE_CI_TOKEN без префикса Bearer.
   schemas:
-    ProjectID:
+    UUID:
       type: string
       format: uuid
       pattern: '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+    ProjectID:
+      $ref: '#/components/schemas/UUID'
     RepoURL:
       type: string
       format: uri
@@ -197,7 +361,7 @@ components:
     ProjectRegistration:
       type: object
       additionalProperties: false
-      required: [id, repo_url]
+      required: [id, repo_url, config]
       properties:
         id:
           $ref: '#/components/schemas/ProjectID'
@@ -207,9 +371,24 @@ components:
           type: [boolean, 'null']
           default: true
           description: При отсутствии поля или значении null проект считается активным.
+        config:
+          $ref: '#/components/schemas/ProjectConfig'
     Project:
+      $ref: '#/components/schemas/ProjectFields'
+      unevaluatedProperties: false
+    ConfiguredProject:
+      allOf:
+        - $ref: '#/components/schemas/ProjectFields'
+        - type: object
+          required: [config, config_revision]
+          properties:
+            config:
+              $ref: '#/components/schemas/ProjectConfig'
+            config_revision:
+              $ref: '#/components/schemas/Revision'
+      unevaluatedProperties: false
+    ProjectFields:
       type: object
-      additionalProperties: false
       required: [id, repo_url, observed_sha, observed_revision]
       properties:
         id:
@@ -220,6 +399,154 @@ components:
           $ref: '#/components/schemas/NullableSHA'
         observed_revision:
           $ref: '#/components/schemas/Revision'
+    ProjectConfigUpdate:
+      type: object
+      additionalProperties: false
+      required: [previous_revision, config]
+      properties:
+        previous_revision:
+          $ref: '#/components/schemas/Revision'
+          description: Ожидаемая ревизия конфигурации проекта.
+        config:
+          $ref: '#/components/schemas/ProjectConfig'
+    ProjectConfig:
+      type: object
+      additionalProperties: false
+      required: [hostname, services]
+      properties:
+        hostname:
+          type: string
+          maxLength: 253
+          pattern: '^[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?(\.[A-Za-z0-9]([A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$'
+          not:
+            pattern: '^[0-9]+(\.[0-9]+){3}$'
+          description: ASCII DNS-имя, IDN в формате Punycode. Хранится в нижнем регистре.
+        services:
+          type: object
+          minProperties: 1
+          additionalProperties: false
+          properties:
+            frontend:
+              $ref: '#/components/schemas/ServiceConfig'
+              description: Порт по умолчанию 80.
+            backend:
+              $ref: '#/components/schemas/ServiceConfig'
+              description: Порт по умолчанию 8000.
+        postgresql:
+          type: [object, 'null']
+          additionalProperties: false
+          properties:
+            enabled:
+              type: [boolean, 'null']
+              default: false
+        env:
+          type: [object, 'null']
+          propertyNames:
+            pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+          additionalProperties:
+            type: string
+          description: Имена переменных должны отличаться от имён в secrets.
+        secrets:
+          type: [object, 'null']
+          propertyNames:
+            pattern: '^[A-Za-z_][A-Za-z0-9_]*$'
+          additionalProperties:
+            type: string
+            contentEncoding: base64
+          description: Значения, уже зашифрованные в формате Sealed Secrets.
+    ServiceConfig:
+      type: object
+      additionalProperties: false
+      required: [dockerfile]
+      properties:
+        dockerfile:
+          type: string
+          minLength: 1
+          description: Относительный путь к файлу без сегментов .., двоеточий и обратных косых черт.
+        context:
+          type: [string, 'null']
+          description: Относительный путь к каталогу по тем же правилам. По умолчанию каталог Dockerfile.
+        port:
+          type: [integer, 'null']
+          minimum: 1
+          maximum: 65535
+    ClaimedBuild:
+      type: object
+      additionalProperties: false
+      required: [id, source_event_id, project_id, repo_url, sha, status, config_revision, config_snapshot]
+      properties:
+        id:
+          $ref: '#/components/schemas/UUID'
+        source_event_id:
+          $ref: '#/components/schemas/UUID'
+        project_id:
+          $ref: '#/components/schemas/ProjectID'
+        repo_url:
+          $ref: '#/components/schemas/RepoURL'
+        sha:
+          $ref: '#/components/schemas/SHA'
+        status:
+          const: running
+        config_revision:
+          $ref: '#/components/schemas/Revision'
+        config_snapshot:
+          $ref: '#/components/schemas/ProjectConfig'
+    BuildPatch:
+      type: object
+      additionalProperties: false
+      properties:
+        pipeline_run:
+          type: [string, 'null']
+          maxLength: 253
+          pattern: '^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$'
+        status:
+          enum: [succeeded, failed, null]
+        image_digests:
+          anyOf:
+            - $ref: '#/components/schemas/ImageDigests'
+            - type: 'null'
+      anyOf:
+        - required: [pipeline_run]
+          properties:
+            pipeline_run: {type: string}
+        - required: [status]
+          properties:
+            status: {type: string}
+      if:
+        required: [status]
+        properties:
+          status: {const: succeeded}
+      then:
+        required: [image_digests]
+        properties:
+          image_digests: {type: object}
+      else:
+        properties:
+          image_digests: {type: 'null'}
+    ImageDigests:
+      type: object
+      minProperties: 1
+      propertyNames:
+        enum: [frontend, backend]
+      additionalProperties:
+        type: string
+        pattern: '^((([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]+|localhost)(:[0-9]+)?|[a-zA-Z0-9-]+:[0-9]+|\[[0-9a-fA-F:]+\](:[0-9]+)?)(/[a-z0-9]+(([._]|__|-+)[a-z0-9]+)*)+(:[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127})?@(sha256:[0-9a-f]{64}|sha384:[0-9a-f]{96}|sha512:[0-9a-f]{128})$'
+        description: Полная OCI-ссылка, закреплённая по digest.
+    BuildState:
+      type: object
+      additionalProperties: false
+      required: [id, status, pipeline_run, image_digests]
+      properties:
+        id:
+          $ref: '#/components/schemas/UUID'
+        status:
+          enum: [running, succeeded, failed]
+        pipeline_run:
+          type: [string, 'null']
+        image_digests:
+          anyOf:
+            - $ref: '#/components/schemas/ImageDigests'
+            - type: 'null'
     Observation:
       type: object
       additionalProperties: false
@@ -241,6 +568,39 @@ components:
         error:
           type: string
   responses:
+    ConfiguredProjectState:
+      description: Текущее состояние проекта с нормализованной конфигурацией.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ConfiguredProject'
+          example:
+            id: 0812951a-c377-4045-8c09-83595bd5222d
+            repo_url: https://git.example.org/team/app.git
+            observed_sha: null
+            observed_revision: 0
+            config_revision: 1
+            config:
+              hostname: demo.example.org
+              services:
+                frontend: {dockerfile: web/Dockerfile, context: web, port: 80}
+              postgresql: {enabled: false}
+              env: {}
+              secrets: {}
+    BadRequest:
+      description: Некорректные данные запроса.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: {error: invalid JSON request}
+    ProjectNotFound:
+      description: Проект с таким UUID не найден.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          example: {error: project not found}
     ProjectState:
       description: Текущее состояние проекта.
       content:

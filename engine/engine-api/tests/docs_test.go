@@ -9,15 +9,15 @@ import (
 )
 
 func TestSwaggerRoutes(t *testing.T) {
-	enabled := engineapi.NewHandler(nil, platformTestToken, watcherTestToken, true)
-	disabled := engineapi.NewHandler(nil, platformTestToken, watcherTestToken, false)
+	enabled := engineapi.NewHandler(nil, platformTestToken, watcherTestToken, ciTestToken, true)
+	disabled := engineapi.NewHandler(nil, platformTestToken, watcherTestToken, ciTestToken, false)
 
 	for _, file := range []struct {
 		path, contentType string
 		markers           []string
 	}{
 		{"/docs", "text/html", []string{"ОпенПейч Engine API", "openpage-docs-header", "/docs/mark.svg", "/docs/swagger-theme.css", "/docs/swagger-ui.css", "/docs/swagger-ui-bundle.js", "/docs/swagger-init.js"}},
-		{"/docs/openapi.yaml", "application/yaml", []string{"openapi: 3.1.0", "title: ОпенПейч Engine API", createPath, listPath, listPath + "/{id}/observations"}},
+		{"/docs/openapi.yaml", "application/yaml", []string{"openapi: 3.1.0", "title: ОпенПейч Engine API", createPath, listPath, listPath + "/{id}/observations", createPath + "/{id}/config", claimPath, buildsPath + "/{id}", "CIBearer"}},
 		{"/docs/swagger-init.js", "text/javascript", []string{"SwaggerUIBundle", "/docs/openapi.yaml", "validatorUrl: null"}},
 		{"/docs/swagger-ui-bundle.js", "text/javascript", []string{"SwaggerUIBundle"}},
 		{"/docs/swagger-ui.css", "text/css", []string{".swagger-ui"}},

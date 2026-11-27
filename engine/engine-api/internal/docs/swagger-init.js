@@ -7,5 +7,5 @@ SwaggerUIBundle({
   filter: true,
   persistAuthorization: false,
   validatorUrl: null,
-  supportedSubmitMethods: ["get", "post"],
+  supportedSubmitMethods: ["get", "post", "put", "patch"],
 });

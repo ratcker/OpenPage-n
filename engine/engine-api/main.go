@@ -36,8 +36,10 @@ func run(ctx context.Context) error {
 	dsn := os.Getenv("ENGINE_DATABASE_URL")
 	platformToken := os.Getenv("ENGINE_PLATFORM_TOKEN")
 	watcherToken := os.Getenv("ENGINE_WATCHER_TOKEN")
-	if dsn == "" || !validToken(platformToken) || !validToken(watcherToken) || platformToken == watcherToken {
-		return errors.New("set ENGINE_DATABASE_URL and distinct ENGINE_PLATFORM_TOKEN and ENGINE_WATCHER_TOKEN")
+	ciToken := os.Getenv("ENGINE_CI_TOKEN")
+	if dsn == "" || !validToken(platformToken) || !validToken(watcherToken) || !validToken(ciToken) ||
+		platformToken == watcherToken || platformToken == ciToken || watcherToken == ciToken {
+		return errors.New("set ENGINE_DATABASE_URL and distinct ENGINE_PLATFORM_TOKEN, ENGINE_WATCHER_TOKEN and ENGINE_CI_TOKEN")
 	}
 	addr := os.Getenv("ENGINE_HTTP_ADDR")
 	if addr == "" {
@@ -60,7 +62,7 @@ func run(ctx context.Context) error {
 	docsEnabled := docsSetting == "" || docsSetting == "true"
 	server := &http.Server{
 		Addr:              addr,
-		Handler:           engineapi.NewHandler(db, platformToken, watcherToken, docsEnabled),
+		Handler:           engineapi.NewHandler(db, platformToken, watcherToken, ciToken, docsEnabled),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       10 * time.Second,
 		WriteTimeout:      20 * time.Second,

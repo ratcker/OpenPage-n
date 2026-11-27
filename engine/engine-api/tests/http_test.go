@@ -27,11 +27,13 @@ const (
 	dbTimeout         = 5 * time.Second
 	platformTestToken = "platform-test"
 	watcherTestToken  = "watcher-test"
+	ciTestToken       = "ci-test"
 	createPath        = "/internal/v1/projects"
 	listPath          = "/internal/v1/watcher/projects"
 	projectID         = "0812951a-c377-4045-8c09-83595bd5222d"
 	disabledID        = "7ad4d2ed-e588-4809-b686-61b9b5e4275a"
 	repoURL           = "https://github.com/example/repository.git"
+	basicConfig       = `{"hostname":"demo.example.org","services":{"frontend":{"dockerfile":"web/Dockerfile"}}}`
 	shaA              = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
 	shaB              = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 	shaC              = "cccccccccccccccccccccccccccccccccccccccc"
@@ -62,7 +64,7 @@ func expectStatus(t *testing.T, resp *httptest.ResponseRecorder, want int) {
 }
 
 func postProject(h http.Handler, id, repo string, enabled bool) *httptest.ResponseRecorder {
-	body := fmt.Sprintf(`{"id":%q,"repo_url":%q,"enabled":%t}`, id, repo, enabled)
+	body := fmt.Sprintf(`{"id":%q,"repo_url":%q,"enabled":%t,"config":%s}`, id, repo, enabled, basicConfig)
 	return request(h, http.MethodPost, createPath, platformTestToken, body)
 }
 
@@ -77,7 +79,7 @@ func postObservation(h http.Handler, id, previous string, revision int64, sha st
 
 func TestAuthAndValidation(t *testing.T) {
 	// Эти запросы должны завершиться до обращения к БД.
-	h := engineapi.NewHandler(nil, platformTestToken, watcherTestToken, false)
+	h := engineapi.NewHandler(nil, platformTestToken, watcherTestToken, ciTestToken, false)
 	for _, tc := range []struct {
 		name, method, path, token, body string
 		status                          int
@@ -100,9 +102,9 @@ func TestAuthAndValidation(t *testing.T) {
 
 func TestProjectRegistration(t *testing.T) {
 	db, _ := testDB(t)
-	h := engineapi.NewHandler(db, platformTestToken, watcherTestToken, false)
+	h := engineapi.NewHandler(db, platformTestToken, watcherTestToken, ciTestToken, false)
 	expectStatus(t, postProject(h, projectID, repoURL, true), 201)
-	repeat := request(h, "POST", createPath, platformTestToken, fmt.Sprintf(`{"id":%q,"repo_url":%q}`, projectID, repoURL))
+	repeat := request(h, "POST", createPath, platformTestToken, fmt.Sprintf(`{"id":%q,"repo_url":%q,"config":%s}`, projectID, repoURL, basicConfig))
 	expectStatus(t, repeat, 200)
 	expectStatus(t, postProject(h, projectID, repoURL+"-other", true), 409)
 	expectStatus(t, postProject(h, projectID, repoURL, false), 409)
@@ -124,7 +126,7 @@ func TestProjectRegistration(t *testing.T) {
 
 func TestSourceEventRevisions(t *testing.T) {
 	db, _ := testDB(t)
-	h := engineapi.NewHandler(db, platformTestToken, watcherTestToken, false)
+	h := engineapi.NewHandler(db, platformTestToken, watcherTestToken, ciTestToken, false)
 	expectStatus(t, postProject(h, projectID, repoURL, true), 201)
 	expectStatus(t, postObservation(h, projectID, "", 0, shaA), 200)
 	expectStatus(t, postObservation(h, projectID, "", 0, shaA), 200)
@@ -165,7 +167,7 @@ func TestSourceEventRevisions(t *testing.T) {
 
 func TestConcurrentObservations(t *testing.T) {
 	db, _ := testDB(t)
-	h := engineapi.NewHandler(db, platformTestToken, watcherTestToken, false)
+	h := engineapi.NewHandler(db, platformTestToken, watcherTestToken, ciTestToken, false)
 	expectStatus(t, postProject(h, projectID, repoURL, true), 201)
 	expectStatus(t, postObservation(h, projectID, "", 0, shaA), 200)
 
@@ -215,7 +217,7 @@ func TestConcurrentObservations(t *testing.T) {
 
 func TestObservationRollsBackWhenEventInsertFails(t *testing.T) {
 	db, _ := testDB(t)
-	h := engineapi.NewHandler(db, platformTestToken, watcherTestToken, false)
+	h := engineapi.NewHandler(db, platformTestToken, watcherTestToken, ciTestToken, false)
 	expectStatus(t, postProject(h, projectID, repoURL, true), 201)
 	expectStatus(t, postObservation(h, projectID, "", 0, shaA), 200)
 
@@ -227,6 +229,16 @@ func TestObservationRollsBackWhenEventInsertFails(t *testing.T) {
 	expectStatus(t, postObservation(h, projectID, shaA, 1, shaB), 500)
 	assertState(t, db, shaA, 1, 1)
 	if _, err := db.ExecContext(ctx, `ALTER TABLE source_events DROP CONSTRAINT reject_next_event`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `
+		ALTER TABLE builds ADD CONSTRAINT reject_next_build CHECK (status <> 'pending') NOT VALID`); err != nil {
+		t.Fatal(err)
+	}
+	expectStatus(t, postObservation(h, projectID, shaA, 1, shaB), 500)
+	assertState(t, db, shaA, 1, 1)
+	assertBuildCounts(t, db, map[string]int{"pending": 1})
+	if _, err := db.ExecContext(ctx, `ALTER TABLE builds DROP CONSTRAINT reject_next_build`); err != nil {
 		t.Fatal(err)
 	}
 	expectStatus(t, postObservation(h, projectID, shaA, 1, shaB), 200)
@@ -243,8 +255,8 @@ func TestMigrationDown(t *testing.T) {
 	var gone bool
 	if err := db.QueryRowContext(ctx, `
 		SELECT count(*) = 0 FROM information_schema.tables
-		WHERE table_schema = current_schema() AND table_name IN ('projects', 'source_events')`).Scan(&gone); err != nil || !gone {
-		t.Fatalf("expected both tables removed, got %t, err=%v", gone, err)
+		WHERE table_schema = current_schema() AND table_name IN ('projects', 'source_events', 'builds')`).Scan(&gone); err != nil || !gone {
+		t.Fatalf("expected all three tables removed, got %t, err=%v", gone, err)
 	}
 }
 
